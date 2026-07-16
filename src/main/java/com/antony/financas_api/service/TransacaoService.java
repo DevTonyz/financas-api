@@ -1,7 +1,10 @@
 package com.antony.financas_api.service;
 
+import com.antony.financas_api.dto.TransacaoRequestDTO;
+import com.antony.financas_api.model.Categoria;
 import com.antony.financas_api.model.FormaPagamento;
 import com.antony.financas_api.model.Transacao;
+import com.antony.financas_api.repository.CategoriaRepository;
 import com.antony.financas_api.repository.TransacaoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -17,34 +20,43 @@ public class TransacaoService {
     @Autowired
     private TransacaoRepository repository;
 
-    public List<Transacao> salvarTransacao(Transacao transacaoOriginal) {
+    @Autowired
+    private CategoriaRepository categoriaRepository;
+
+    public List<Transacao> salvarTransacao(TransacaoRequestDTO dto) {
+
+        // 1. Busca a categoria no banco usando o ID mais enxuto que veio do aplicativo
+        Categoria categoria = categoriaRepository.findById(dto.categoriaId())
+                .orElseThrow(() -> new RuntimeException("Categoria não encontrada!"));
+
+        // 2. Converte o DTO (Carteiro) para a Entidade (Banco de Dados)
+        Transacao transacaoOriginal = new Transacao();
+        transacaoOriginal.setDescricao(dto.descricao()); // No record, não usamos "get". É só o nome do método!
+        transacaoOriginal.setValor(dto.valor());
+        transacaoOriginal.setData(dto.data());
+        transacaoOriginal.setCategoria(categoria);
+        transacaoOriginal.setFormaPagamento(dto.formaPagamento());
+        transacaoOriginal.setParcelas(dto.parcelas());
 
         List<Transacao> transacoesSalvas = new ArrayList<>();
 
+        // 3. O motor de parcelamento continua o mesmo!
         if (transacaoOriginal.getFormaPagamento() == FormaPagamento.CREDITO && transacaoOriginal.getParcelas() > 1) {
-
-            // Divide o valor total pelo número de parcelas, arredondando os centavos corretamente
             BigDecimal valorParcela = transacaoOriginal.getValor().divide(
                     new BigDecimal(transacaoOriginal.getParcelas()), 2, RoundingMode.HALF_UP);
 
-            // Cria um registro no banco para cada parcela
             for (int i = 0; i < transacaoOriginal.getParcelas(); i++) {
                 Transacao novaTransacao = new Transacao();
-
-                // Formata a descrição para mostrar a parcela atual (ex: "Pneu Twister 1/3")
                 novaTransacao.setDescricao(transacaoOriginal.getDescricao() + " " + (i + 1) + "/" + transacaoOriginal.getParcelas());
                 novaTransacao.setValor(valorParcela);
-                // Joga a data de cobrança para o mês seguinte a cada iteração do laço
                 novaTransacao.setData(transacaoOriginal.getData().plusMonths(i));
                 novaTransacao.setCategoria(transacaoOriginal.getCategoria());
                 novaTransacao.setFormaPagamento(transacaoOriginal.getFormaPagamento());
                 novaTransacao.setParcelas(transacaoOriginal.getParcelas());
 
-                // Salva no banco e adiciona na lista de retorno
                 transacoesSalvas.add(repository.save(novaTransacao));
             }
         } else {
-            // Se for Pix, Débito, ou Crédito em 1x, salva a transação original diretamente
             transacoesSalvas.add(repository.save(transacaoOriginal));
         }
 

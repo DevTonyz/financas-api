@@ -1,5 +1,6 @@
 package com.antony.financas_api.controller;
 
+import com.antony.financas_api.dto.TransacaoRequestDTO;
 import com.antony.financas_api.model.Transacao;
 import com.antony.financas_api.repository.TransacaoRepository;
 import com.antony.financas_api.service.TransacaoService;
@@ -24,9 +25,8 @@ public class TransacaoController {
     private TransacaoRepository repository;
 
     @PostMapping
-    public List<Transacao> criarTransacao(@Valid @RequestBody Transacao transacao) {
-        // O garçom entrega o pedido para a cozinha (Service)
-        return service.salvarTransacao(transacao);
+    public List<Transacao> criarTransacao(@Valid @RequestBody TransacaoRequestDTO dto) {
+        return service.salvarTransacao(dto);
     }
 
     @GetMapping
