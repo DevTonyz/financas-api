@@ -1,7 +1,7 @@
 package com.antony.financas_api.controller;
 
 import com.antony.financas_api.dto.TransacaoRequestDTO;
-import com.antony.financas_api.model.Transacao;
+import com.antony.financas_api.dto.TransacaoResponseDTO;
 import com.antony.financas_api.repository.TransacaoRepository;
 import com.antony.financas_api.service.TransacaoService;
 import jakarta.validation.Valid;
@@ -16,38 +16,33 @@ import java.util.List;
 @RequestMapping("/transacoes")
 public class TransacaoController {
 
-    // Injetamos o Service para cuidar da lógica complexa de parcelamento (POST)
     @Autowired
     private TransacaoService service;
 
-    // Injetamos o Repository de volta apenas para fazer buscas simples no banco (GET)
     @Autowired
     private TransacaoRepository repository;
 
     @PostMapping
-    public List<Transacao> criarTransacao(@Valid @RequestBody TransacaoRequestDTO dto) {
+    public List<TransacaoResponseDTO> criarTransacao(@Valid @RequestBody TransacaoRequestDTO dto) {
         return service.salvarTransacao(dto);
     }
 
     @GetMapping
-    public List<Transacao> listarTransacoes() {
-        // Busca direto no banco e devolve a lista
-        return repository.findAll();
+    public List<TransacaoResponseDTO> listarTransacoes() {
+        // Busca do banco e transforma no DTO antes de devolver para o aplicativo
+        return repository.findAll().stream().map(TransacaoResponseDTO::new).toList();
     }
 
-    // O @PathVariable pega o número que você digitar na URL e joga na variável 'id'
     @GetMapping("/categoria/{id}")
-    public List<Transacao> listarPorCategoria(@PathVariable Long id) {
-        return repository.findByCategoriaId(id);
+    public List<TransacaoResponseDTO> listarPorCategoria(@PathVariable Long id) {
+        return repository.findByCategoriaId(id).stream().map(TransacaoResponseDTO::new).toList();
     }
 
-    // Exemplo de URL: localhost:8080/transacoes/periodo?inicio=2026-07-01&fim=2026-07-31
     @GetMapping("/periodo")
-    public List<Transacao> listarPorPeriodo(@RequestParam LocalDate inicio, @RequestParam LocalDate fim) {
-        return repository.findByDataBetween(inicio, fim);
+    public List<TransacaoResponseDTO> listarPorPeriodo(@RequestParam LocalDate inicio, @RequestParam LocalDate fim) {
+        return repository.findByDataBetween(inicio, fim).stream().map(TransacaoResponseDTO::new).toList();
     }
 
-    // Exemplo de URL: localhost:8080/transacoes/total?inicio=2026-07-01&fim=2026-07-31
     @GetMapping("/total")
     public BigDecimal totalPorPeriodo(@RequestParam LocalDate inicio, @RequestParam LocalDate fim) {
         return repository.somarGastosPorPeriodo(inicio, fim);

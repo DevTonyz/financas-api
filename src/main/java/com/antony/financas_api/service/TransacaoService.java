@@ -1,6 +1,7 @@
 package com.antony.financas_api.service;
 
 import com.antony.financas_api.dto.TransacaoRequestDTO;
+import com.antony.financas_api.dto.TransacaoResponseDTO;
 import com.antony.financas_api.model.Categoria;
 import com.antony.financas_api.model.FormaPagamento;
 import com.antony.financas_api.model.Transacao;
@@ -23,15 +24,14 @@ public class TransacaoService {
     @Autowired
     private CategoriaRepository categoriaRepository;
 
-    public List<Transacao> salvarTransacao(TransacaoRequestDTO dto) {
+    // Repare que agora a saída é TransacaoResponseDTO
+    public List<TransacaoResponseDTO> salvarTransacao(TransacaoRequestDTO dto) {
 
-        // 1. Busca a categoria no banco usando o ID mais enxuto que veio do aplicativo
         Categoria categoria = categoriaRepository.findById(dto.categoriaId())
                 .orElseThrow(() -> new RuntimeException("Categoria não encontrada!"));
 
-        // 2. Converte o DTO (Carteiro) para a Entidade (Banco de Dados)
         Transacao transacaoOriginal = new Transacao();
-        transacaoOriginal.setDescricao(dto.descricao()); // No record, não usamos "get". É só o nome do método!
+        transacaoOriginal.setDescricao(dto.descricao());
         transacaoOriginal.setValor(dto.valor());
         transacaoOriginal.setData(dto.data());
         transacaoOriginal.setCategoria(categoria);
@@ -40,7 +40,6 @@ public class TransacaoService {
 
         List<Transacao> transacoesSalvas = new ArrayList<>();
 
-        // 3. O motor de parcelamento continua o mesmo!
         if (transacaoOriginal.getFormaPagamento() == FormaPagamento.CREDITO && transacaoOriginal.getParcelas() > 1) {
             BigDecimal valorParcela = transacaoOriginal.getValor().divide(
                     new BigDecimal(transacaoOriginal.getParcelas()), 2, RoundingMode.HALF_UP);
@@ -60,6 +59,7 @@ public class TransacaoService {
             transacoesSalvas.add(repository.save(transacaoOriginal));
         }
 
-        return transacoesSalvas;
+        // A MÁGICA FINAL: Transforma a lista de Transacoes do banco na lista de ResponseDTOs
+        return transacoesSalvas.stream().map(TransacaoResponseDTO::new).toList();
     }
 }
