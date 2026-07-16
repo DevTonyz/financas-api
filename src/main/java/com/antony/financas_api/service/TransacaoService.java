@@ -10,6 +10,7 @@ import com.antony.financas_api.repository.TransacaoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -61,5 +62,37 @@ public class TransacaoService {
 
         // A MÁGICA FINAL: Transforma a lista de Transacoes do banco na lista de ResponseDTOs
         return transacoesSalvas.stream().map(TransacaoResponseDTO::new).toList();
+    }
+
+    // --- NOVOS MÉTODOS DE ATUALIZAR E DELETAR ---
+
+    public TransacaoResponseDTO atualizarTransacao(Long id, TransacaoRequestDTO dto) {
+        // 1. Procura a transação que já existe no banco
+        Transacao transacaoExistente = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Transação não encontrada para atualizar!"));
+
+        // 2. Procura se a categoria nova enviada existe
+        Categoria categoria = categoriaRepository.findById(dto.categoriaId())
+                .orElseThrow(() -> new RuntimeException("Categoria não encontrada!"));
+
+        // 3. Substitui os dados velhos pelos novos
+        transacaoExistente.setDescricao(dto.descricao());
+        transacaoExistente.setValor(dto.valor());
+        transacaoExistente.setData(dto.data());
+        transacaoExistente.setCategoria(categoria);
+        transacaoExistente.setFormaPagamento(dto.formaPagamento());
+        transacaoExistente.setParcelas(dto.parcelas());
+
+        // 4. Salva a modificação e já devolve empacotado no DTO de Saída
+        Transacao transacaoAtualizada = repository.save(transacaoExistente);
+        return new TransacaoResponseDTO(transacaoAtualizada);
+    }
+
+    public void deletarTransacao(Long id) {
+        // Verifica se existe antes de apagar
+        Transacao transacaoExistente = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Transação não encontrada para deletar!"));
+
+        repository.delete(transacaoExistente);
     }
 }

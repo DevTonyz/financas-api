@@ -7,6 +7,10 @@ import com.antony.financas_api.service.TransacaoService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -28,23 +32,34 @@ public class TransacaoController {
     }
 
     @GetMapping
-    public List<TransacaoResponseDTO> listarTransacoes() {
-        // Busca do banco e transforma no DTO antes de devolver para o aplicativo
-        return repository.findAll().stream().map(TransacaoResponseDTO::new).toList();
+    public Page<TransacaoResponseDTO> listarTransacoes(@PageableDefault(size = 10, sort = {"data"}) Pageable paginacao) {
+        // O método .map() funciona perfeitamente em Páginas também!
+        return repository.findAll(paginacao).map(TransacaoResponseDTO::new);
     }
 
     @GetMapping("/categoria/{id}")
-    public List<TransacaoResponseDTO> listarPorCategoria(@PathVariable Long id) {
-        return repository.findByCategoriaId(id).stream().map(TransacaoResponseDTO::new).toList();
+    public Page<TransacaoResponseDTO> listarPorCategoria(@PathVariable Long id, @PageableDefault(size = 10) Pageable paginacao) {
+        return repository.findByCategoriaId(id, paginacao).map(TransacaoResponseDTO::new);
     }
 
     @GetMapping("/periodo")
-    public List<TransacaoResponseDTO> listarPorPeriodo(@RequestParam LocalDate inicio, @RequestParam LocalDate fim) {
-        return repository.findByDataBetween(inicio, fim).stream().map(TransacaoResponseDTO::new).toList();
+    public Page<TransacaoResponseDTO> listarPorPeriodo(
+            @RequestParam LocalDate inicio,
+            @RequestParam LocalDate fim,
+            @PageableDefault(size = 10, sort = {"data"}) Pageable paginacao) {
+
+        return repository.findByDataBetween(inicio, fim, paginacao).map(TransacaoResponseDTO::new);
     }
 
-    @GetMapping("/total")
-    public BigDecimal totalPorPeriodo(@RequestParam LocalDate inicio, @RequestParam LocalDate fim) {
-        return repository.somarGastosPorPeriodo(inicio, fim);
+    @PutMapping("/{id}")
+    public TransacaoResponseDTO atualizarTransacao(@PathVariable Long id, @Valid @RequestBody TransacaoRequestDTO dto) {
+        return service.atualizarTransacao(id, dto);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deletarTransacao(@PathVariable Long id) {
+        service.deletarTransacao(id);
+        // Retorna o status 204 (Sucesso, mas sem conteúdo na tela, já que foi apagado)
+        return ResponseEntity.noContent().build();
     }
 }
