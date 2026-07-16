@@ -3,6 +3,9 @@ package com.antony.financas_api.model;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
 @Entity
 @Table(name = "tb_transacoes")
@@ -12,30 +15,22 @@ public class Transacao {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Ex: "Abastecimento Twister" ou "Mensalidade IFRS"
+    @NotBlank // <-- Coloque aqui, colado em cima da variável 'descricao'
     private String descricao;
 
-    // Usamos BigDecimal para dinheiro no Java. Ele evita aqueles bugs de
-    // dízima periódica (ex: 10.999999) que acontecem com o tipo Double.
+    @NotNull  // <-- Coloque aqui
+    @Positive // <-- E aqui também, em cima da variável 'valor'
     private BigDecimal valor;
 
-    // Para sabermos em qual mês/fatura essa compra entra.
+    @NotNull  // <-- Coloque aqui, em cima da variável 'data'
     private LocalDate data;
 
-    // --- RELACIONAMENTOS ---
-
-    // @ManyToOne significa "Muitas transações podem pertencer a Uma mesma categoria".
-    // A anotação @JoinColumn diz qual será o nome da coluna de ligação lá no banco.
     @ManyToOne
-    @JoinColumn(name = "categoria_id")
     private Categoria categoria;
 
-    // @Enumerated(EnumType.STRING) avisa o banco para salvar a palavra (ex: "CREDITO")
-    // em vez de salvar a posição do enum (0, 1, 2). Isso facilita a leitura no banco.
     @Enumerated(EnumType.STRING)
     private FormaPagamento formaPagamento;
 
-    // A quantidade de vezes que a compra foi dividida (1 para débito/pix, 2+ para crédito).
     private Integer parcelas;
 
 
