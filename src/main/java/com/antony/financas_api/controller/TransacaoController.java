@@ -17,6 +17,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearer-key")
+
 @RestController
 @RequestMapping("/transacoes")
 public class TransacaoController {

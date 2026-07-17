@@ -1,6 +1,9 @@
 package com.antony.financas_api.exception;
 
+import jakarta.persistence.EntityNotFoundException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -8,28 +11,31 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.List;
 
-@RestControllerAdvice // Diz ao Spring: "Se der erro em qualquer Controller, chame esta classe"
+@RestControllerAdvice
 public class TratadorDeErros {
 
-    // Intercepta especificamente os erros dos nossos "Guardas" (@Valid)
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<List<DadosErroValidacao>> tratarErro400(MethodArgumentNotValidException ex) {
-
-        // Pega todos os campos que falharam na validação
-        List<FieldError> erros = ex.getFieldErrors();
-
-        // Transforma a lista complexa do Spring na nossa versão enxuta e legível
-        List<DadosErroValidacao> errosFormatados = erros.stream()
-                .map(DadosErroValidacao::new)
-                .toList();
-
-        return ResponseEntity.badRequest().body(errosFormatados);
+    // Captura erro 404 (Quando busca um ID que não existe no banco)
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity tratarErro404() {
+        return ResponseEntity.notFound().build();
     }
 
-    // Um 'record' é uma forma moderna e curta do Java para criar classes de transporte de dados
+    // Captura erro 400 (Quando o usuário esquece de preencher um campo obrigatório, como o Valor da transação)
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity tratarErro400(MethodArgumentNotValidException ex) {
+        var erros = ex.getFieldErrors();
+        return ResponseEntity.badRequest().body(erros.stream().map(DadosErroValidacao::new).toList());
+    }
+
+    // Captura erro de Login (Senha ou e-mail incorretos)
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity tratarErroBadCredentials() {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Credenciais inválidas");
+    }
+
+    // DTO interno para formatar a lista de campos que vieram em branco
     private record DadosErroValidacao(String campo, String mensagem) {
         public DadosErroValidacao(FieldError erro) {
-            // Pega apenas o nome da variável e a mensagem padrão de erro
             this(erro.getField(), erro.getDefaultMessage());
         }
     }
