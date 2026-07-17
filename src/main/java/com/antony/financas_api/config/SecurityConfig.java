@@ -27,11 +27,12 @@ public class SecurityConfig {
                 // Configura a API para não guardar sessão (exigência para usar Tokens JWT)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(req -> {
-                    // Portas abertas para o Swagger e para a tela de Login
                     req.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll();
                     req.requestMatchers(HttpMethod.POST, "/login").permitAll();
 
-                    // Qualquer outra rota exigirá autenticação via Token
+                    // LIBERANDO A ROTA DE CADASTRO:
+                    req.requestMatchers(HttpMethod.POST, "/usuarios").permitAll();
+
                     req.anyRequest().authenticated();
                 })
                 // Ensina o Spring a usar o nosso filtro customizado antes do filtro padrão
