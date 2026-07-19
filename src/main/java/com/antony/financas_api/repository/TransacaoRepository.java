@@ -18,6 +18,8 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
 
     Page<Transacao> findByDataBetweenAndUsuarioId(LocalDate dataInicio, LocalDate dataFim, Long usuarioId, Pageable paginacao);
 
+    Page<Transacao> findByGrupoId(Long grupoId, Pageable paginacao);
+
     @Query("SELECT SUM(t.valor) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.data BETWEEN :inicio AND :fim")
     BigDecimal somarGastosPorPeriodo(@Param("inicio") LocalDate inicio, @Param("fim") LocalDate fim, @Param("usuarioId") Long usuarioId);
 }

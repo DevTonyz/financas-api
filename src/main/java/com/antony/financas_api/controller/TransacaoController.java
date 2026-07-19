@@ -15,6 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springdoc.core.annotations.ParameterObject;
 import com.antony.financas_api.dto.ResumoResponseDTO;
+
 import java.time.LocalDate;
 import java.util.List;
 
@@ -81,6 +82,17 @@ public class TransacaoController {
         Long idUsuario = (Long) request.getAttribute("idUsuario");
         ResumoResponseDTO resumo = service.obterResumoMensal(mes, ano, idUsuario);
         return ResponseEntity.ok(resumo);
+    }
+
+    @GetMapping("/grupo/{idGrupo}")
+    public ResponseEntity<Page<TransacaoResponseDTO>> listarPorGrupo(
+            @PathVariable Long idGrupo,
+            @ParameterObject @PageableDefault(size = 10, sort = {"data"}) Pageable paginacao,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        Page<TransacaoResponseDTO> page = service.listarPorGrupo(idGrupo, idUsuario, paginacao);
+        return ResponseEntity.ok(page);
     }
 
     @PutMapping("/{id}")

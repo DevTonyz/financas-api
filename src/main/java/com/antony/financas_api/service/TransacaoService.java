@@ -1,22 +1,25 @@
 package com.antony.financas_api.service;
 
+import com.antony.financas_api.dto.ResumoResponseDTO;
 import com.antony.financas_api.dto.TransacaoRequestDTO;
 import com.antony.financas_api.dto.TransacaoResponseDTO;
 import com.antony.financas_api.model.Categoria;
 import com.antony.financas_api.model.FormaPagamento;
+import com.antony.financas_api.model.Grupo;
 import com.antony.financas_api.model.Transacao;
 import com.antony.financas_api.model.Usuario;
 import com.antony.financas_api.repository.CategoriaRepository;
+import com.antony.financas_api.repository.GrupoRepository;
 import com.antony.financas_api.repository.TransacaoRepository;
 import com.antony.financas_api.repository.UsuarioRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import com.antony.financas_api.dto.ResumoResponseDTO;
-import java.time.LocalDate;
-import java.time.YearMonth;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,12 +35,27 @@ public class TransacaoService {
     @Autowired
     private UsuarioRepository usuarioRepository;
 
+    @Autowired
+    private GrupoRepository grupoRepository;
+
     public List<TransacaoResponseDTO> salvarTransacao(TransacaoRequestDTO dto, Long idUsuario) {
         Usuario usuario = usuarioRepository.findById(idUsuario)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado!"));
 
         Categoria categoria = categoriaRepository.findById(dto.categoriaId())
                 .orElseThrow(() -> new RuntimeException("Categoria não encontrada!"));
+
+        Grupo grupo = null;
+        if (dto.grupoId() != null) {
+            grupo = grupoRepository.findById(dto.grupoId())
+                    .orElseThrow(() -> new RuntimeException("Grupo não encontrado!"));
+
+            boolean fazParte = grupo.getUsuarios().stream()
+                    .anyMatch(u -> u.getId().equals(idUsuario));
+            if (!fazParte) {
+                throw new RuntimeException("Acesso negado: Você não faz parte deste grupo.");
+            }
+        }
 
         Transacao transacaoOriginal = new Transacao();
         transacaoOriginal.setDescricao(dto.descricao());
@@ -47,6 +65,7 @@ public class TransacaoService {
         transacaoOriginal.setFormaPagamento(dto.formaPagamento());
         transacaoOriginal.setParcelas(dto.parcelas());
         transacaoOriginal.setUsuario(usuario);
+        transacaoOriginal.setGrupo(grupo);
 
         List<Transacao> transacoesSalvas = new ArrayList<>();
 
@@ -63,6 +82,7 @@ public class TransacaoService {
                 novaTransacao.setFormaPagamento(transacaoOriginal.getFormaPagamento());
                 novaTransacao.setParcelas(transacaoOriginal.getParcelas());
                 novaTransacao.setUsuario(usuario);
+                novaTransacao.setGrupo(grupo);
 
                 transacoesSalvas.add(repository.save(novaTransacao));
             }
@@ -84,12 +104,25 @@ public class TransacaoService {
         Categoria categoria = categoriaRepository.findById(dto.categoriaId())
                 .orElseThrow(() -> new RuntimeException("Categoria não encontrada!"));
 
+        Grupo grupo = null;
+        if (dto.grupoId() != null) {
+            grupo = grupoRepository.findById(dto.grupoId())
+                    .orElseThrow(() -> new RuntimeException("Grupo não encontrado!"));
+
+            boolean fazParte = grupo.getUsuarios().stream()
+                    .anyMatch(u -> u.getId().equals(idUsuario));
+            if (!fazParte) {
+                throw new RuntimeException("Acesso negado: Você não faz parte deste grupo.");
+            }
+        }
+
         transacaoExistente.setDescricao(dto.descricao());
         transacaoExistente.setValor(dto.valor());
         transacaoExistente.setData(dto.data());
         transacaoExistente.setCategoria(categoria);
         transacaoExistente.setFormaPagamento(dto.formaPagamento());
         transacaoExistente.setParcelas(dto.parcelas());
+        transacaoExistente.setGrupo(grupo);
 
         return new TransacaoResponseDTO(repository.save(transacaoExistente));
     }
@@ -106,21 +139,32 @@ public class TransacaoService {
     }
 
     public ResumoResponseDTO obterResumoMensal(Integer mes, Integer ano, Long idUsuario) {
-
-        // A mágica do Java para calcular datas automaticamente
         YearMonth anoMes = YearMonth.of(ano, mes);
         LocalDate dataInicio = anoMes.atDay(1);
         LocalDate dataFim = anoMes.atEndOfMonth();
 
-        // Chama a sua Query customizada no banco, passando o filtro do usuário
         BigDecimal totalGasto = repository.somarGastosPorPeriodo(dataInicio, dataFim, idUsuario);
 
-        // Se você não gastou nada no mês, o banco devolve 'null'.
-        // Tratamos isso para devolver 0 e não quebrar o aplicativo.
         if (totalGasto == null) {
             totalGasto = BigDecimal.ZERO;
         }
 
         return new ResumoResponseDTO(mes, ano, totalGasto);
+    }
+
+    public Page<TransacaoResponseDTO> listarPorGrupo(Long idGrupo, Long idUsuario, Pageable paginacao) {
+        // 1. Busca o grupo
+        Grupo grupo = grupoRepository.findById(idGrupo)
+                .orElseThrow(() -> new RuntimeException("Grupo não encontrado!"));
+
+        // 2. Trava de segurança: você realmente faz parte dessa casa?
+        boolean fazParte = grupo.getUsuarios().stream()
+                .anyMatch(u -> u.getId().equals(idUsuario));
+        if (!fazParte) {
+            throw new RuntimeException("Acesso negado: Você não pode ver as contas deste grupo.");
+        }
+
+        // 3. Busca os dados no banco e converte para o DTO limpo
+        return repository.findByGrupoId(idGrupo, paginacao).map(TransacaoResponseDTO::new);
     }
 }

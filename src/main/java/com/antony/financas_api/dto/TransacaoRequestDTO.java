@@ -14,6 +14,7 @@ public record TransacaoRequestDTO(
         @NotNull LocalDate data,
         @NotNull Long categoriaId,
         @NotNull FormaPagamento formaPagamento,
-        @NotNull Integer parcelas
+        @NotNull Integer parcelas,
+        Long grupoId // <-- NOVO: Opcional, sem o @NotNull
 ) {
 }
