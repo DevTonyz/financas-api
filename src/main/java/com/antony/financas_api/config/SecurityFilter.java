@@ -1,5 +1,6 @@
 package com.antony.financas_api.config;
 
+import com.antony.financas_api.model.Usuario;
 import com.antony.financas_api.repository.UsuarioRepository;
 import com.antony.financas_api.service.TokenService;
 import jakarta.servlet.FilterChain;
@@ -25,27 +26,22 @@ public class SecurityFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-
-        // Passo 1: Extrai o token do cabeçalho
         var tokenJWT = recuperarToken(request);
 
         if (tokenJWT != null) {
-            // Passo 2: Descriptografa e pega o e-mail
             var login = tokenService.getSubject(tokenJWT);
+            var usuario = (Usuario) repository.findByLogin(login);
 
-            // Passo 3: Busca o usuário (se não achar, daria erro, mas assumimos que o token é válido)
-            var usuario = repository.findByLogin(login);
+            // Disponibiliza o ID do usuário autenticado no contexto da requisição
+            request.setAttribute("idUsuario", usuario.getId());
 
-            // Passo 4: Avisa ao Spring Security que o usuário está autenticado
             var authentication = new UsernamePasswordAuthenticationToken(usuario, null, usuario.getAuthorities());
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 
-        // Continua o fluxo normal da requisição (se não autenticou acima, o Spring bloqueia logo depois daqui)
         filterChain.doFilter(request, response);
     }
 
-    // Método auxiliar para limpar a palavra "Bearer " que o protocolo HTTP coloca na frente do Token
     private String recuperarToken(HttpServletRequest request) {
         var authorizationHeader = request.getHeader("Authorization");
         if (authorizationHeader != null) {

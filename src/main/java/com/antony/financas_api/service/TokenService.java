@@ -15,21 +15,17 @@ import java.time.ZoneOffset;
 @Service
 public class TokenService {
 
-    // Puxa aquela senha secreta que acabamos de colocar no application.properties
     @Value("${api.security.token.secret}")
     private String secret;
 
     public String gerarToken(Usuario usuario) {
         try {
-            // Define o algoritmo de criptografia usando a nossa senha secreta
             Algorithm algoritmo = Algorithm.HMAC256(secret);
-
             return JWT.create()
-                    .withIssuer("API Financas") // Quem está emitindo o token
-                    .withSubject(usuario.getUsername()) // Quem é o dono do token (seu e-mail)
-                    .withExpiresAt(dataExpiracao()) // Quando o token vence
-                    .sign(algoritmo); // Assina e finaliza
-
+                    .withIssuer("API Financas")
+                    .withSubject(usuario.getUsername())
+                    .withExpiresAt(dataExpiracao())
+                    .sign(algoritmo);
         } catch (JWTCreationException exception) {
             throw new RuntimeException("Erro ao gerar token JWT", exception);
         }
@@ -48,8 +44,6 @@ public class TokenService {
         }
     }
 
-    // Regra de negócio: o crachá expira em 2 horas.
-    // Depois disso, o aplicativo do celular terá que pedir outro.
     private Instant dataExpiracao() {
         return LocalDateTime.now().plusHours(2).toInstant(ZoneOffset.of("-03:00"));
     }

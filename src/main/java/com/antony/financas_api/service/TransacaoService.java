@@ -5,11 +5,15 @@ import com.antony.financas_api.dto.TransacaoResponseDTO;
 import com.antony.financas_api.model.Categoria;
 import com.antony.financas_api.model.FormaPagamento;
 import com.antony.financas_api.model.Transacao;
+import com.antony.financas_api.model.Usuario;
 import com.antony.financas_api.repository.CategoriaRepository;
 import com.antony.financas_api.repository.TransacaoRepository;
+import com.antony.financas_api.repository.UsuarioRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
+import com.antony.financas_api.dto.ResumoResponseDTO;
+import java.time.LocalDate;
+import java.time.YearMonth;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -25,8 +29,12 @@ public class TransacaoService {
     @Autowired
     private CategoriaRepository categoriaRepository;
 
-    // Repare que agora a saída é TransacaoResponseDTO
-    public List<TransacaoResponseDTO> salvarTransacao(TransacaoRequestDTO dto) {
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    public List<TransacaoResponseDTO> salvarTransacao(TransacaoRequestDTO dto, Long idUsuario) {
+        Usuario usuario = usuarioRepository.findById(idUsuario)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado!"));
 
         Categoria categoria = categoriaRepository.findById(dto.categoriaId())
                 .orElseThrow(() -> new RuntimeException("Categoria não encontrada!"));
@@ -38,6 +46,7 @@ public class TransacaoService {
         transacaoOriginal.setCategoria(categoria);
         transacaoOriginal.setFormaPagamento(dto.formaPagamento());
         transacaoOriginal.setParcelas(dto.parcelas());
+        transacaoOriginal.setUsuario(usuario);
 
         List<Transacao> transacoesSalvas = new ArrayList<>();
 
@@ -53,6 +62,7 @@ public class TransacaoService {
                 novaTransacao.setCategoria(transacaoOriginal.getCategoria());
                 novaTransacao.setFormaPagamento(transacaoOriginal.getFormaPagamento());
                 novaTransacao.setParcelas(transacaoOriginal.getParcelas());
+                novaTransacao.setUsuario(usuario);
 
                 transacoesSalvas.add(repository.save(novaTransacao));
             }
@@ -60,22 +70,20 @@ public class TransacaoService {
             transacoesSalvas.add(repository.save(transacaoOriginal));
         }
 
-        // A MÁGICA FINAL: Transforma a lista de Transacoes do banco na lista de ResponseDTOs
         return transacoesSalvas.stream().map(TransacaoResponseDTO::new).toList();
     }
 
-    // --- NOVOS MÉTODOS DE ATUALIZAR E DELETAR ---
-
-    public TransacaoResponseDTO atualizarTransacao(Long id, TransacaoRequestDTO dto) {
-        // 1. Procura a transação que já existe no banco
+    public TransacaoResponseDTO atualizarTransacao(Long id, TransacaoRequestDTO dto, Long idUsuario) {
         Transacao transacaoExistente = repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Transação não encontrada para atualizar!"));
+                .orElseThrow(() -> new RuntimeException("Transação não encontrada!"));
 
-        // 2. Procura se a categoria nova enviada existe
+        if (!transacaoExistente.getUsuario().getId().equals(idUsuario)) {
+            throw new RuntimeException("Acesso negado.");
+        }
+
         Categoria categoria = categoriaRepository.findById(dto.categoriaId())
                 .orElseThrow(() -> new RuntimeException("Categoria não encontrada!"));
 
-        // 3. Substitui os dados velhos pelos novos
         transacaoExistente.setDescricao(dto.descricao());
         transacaoExistente.setValor(dto.valor());
         transacaoExistente.setData(dto.data());
@@ -83,16 +91,36 @@ public class TransacaoService {
         transacaoExistente.setFormaPagamento(dto.formaPagamento());
         transacaoExistente.setParcelas(dto.parcelas());
 
-        // 4. Salva a modificação e já devolve empacotado no DTO de Saída
-        Transacao transacaoAtualizada = repository.save(transacaoExistente);
-        return new TransacaoResponseDTO(transacaoAtualizada);
+        return new TransacaoResponseDTO(repository.save(transacaoExistente));
     }
 
-    public void deletarTransacao(Long id) {
-        // Verifica se existe antes de apagar
+    public void deletarTransacao(Long id, Long idUsuario) {
         Transacao transacaoExistente = repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Transação não encontrada para deletar!"));
+                .orElseThrow(() -> new RuntimeException("Transação não encontrada!"));
+
+        if (!transacaoExistente.getUsuario().getId().equals(idUsuario)) {
+            throw new RuntimeException("Acesso negado.");
+        }
 
         repository.delete(transacaoExistente);
+    }
+
+    public ResumoResponseDTO obterResumoMensal(Integer mes, Integer ano, Long idUsuario) {
+
+        // A mágica do Java para calcular datas automaticamente
+        YearMonth anoMes = YearMonth.of(ano, mes);
+        LocalDate dataInicio = anoMes.atDay(1);
+        LocalDate dataFim = anoMes.atEndOfMonth();
+
+        // Chama a sua Query customizada no banco, passando o filtro do usuário
+        BigDecimal totalGasto = repository.somarGastosPorPeriodo(dataInicio, dataFim, idUsuario);
+
+        // Se você não gastou nada no mês, o banco devolve 'null'.
+        // Tratamos isso para devolver 0 e não quebrar o aplicativo.
+        if (totalGasto == null) {
+            totalGasto = BigDecimal.ZERO;
+        }
+
+        return new ResumoResponseDTO(mes, ano, totalGasto);
     }
 }

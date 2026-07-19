@@ -1,9 +1,13 @@
 package com.antony.financas_api.model;
 
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 
-@Entity // 1. Avisa o Spring: "Crie uma tabela no banco de dados para esta classe"
-@Table(name = "tb_categorias") // 2. (Opcional) Dá um nome bonitinho para a tabela
+@Entity
+@Table(name = "tb_categorias")
+@Getter
+@Setter
 public class Categoria {
 
     @Id // 3. Avisa que o campo abaixo é a Chave Primária (o ID único)
@@ -11,22 +15,4 @@ public class Categoria {
     private Long id;
 
     private String nome;
-
-    // TODO: Gerar os Getters e Setters
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getNome() {
-        return nome;
-    }
-
-    public void setNome(String nome) {
-        this.nome = nome;
-    }
 }

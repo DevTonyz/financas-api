@@ -2,34 +2,57 @@ package com.antony.financas_api.controller;
 
 import com.antony.financas_api.model.Categoria;
 import com.antony.financas_api.repository.CategoriaRepository;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.net.URI;
 import java.util.List;
 
-// 1. Avisa o Spring que essa classe vai responder requisições da internet
 @RestController
-// 2. Define o endereço base. Tudo que chegar em "localhost:8080/categorias" cai aqui
 @RequestMapping("/categorias")
+@SecurityRequirement(name = "bearer-key")
 public class CategoriaController {
 
-    // 3. O @Autowired injeta a interface que criamos antes.
-    // É como se o Spring dissesse: "Deixa que eu instancio o banco para você usar"
     @Autowired
     private CategoriaRepository repository;
 
-    // 4. O @PostMapping escuta requisições do tipo POST.
-    // O @RequestBody avisa que os dados da categoria virão no "corpo" da requisição.
     @PostMapping
-    public Categoria criarCategoria(@RequestBody Categoria categoria) {
-        // Pega a categoria recebida e manda o repository salvar no banco
-        return repository.save(categoria);
+    public ResponseEntity<Categoria> criarCategoria(@RequestBody Categoria categoria) {
+        Categoria novaCategoria = repository.save(categoria);
+
+        URI uri = ServletUriComponentsBuilder.fromCurrentRequest()
+                .path("/{id}")
+                .buildAndExpand(novaCategoria.getId()).toUri();
+
+        return ResponseEntity.created(uri).body(novaCategoria);
     }
 
-    // 5. O @GetMapping escuta requisições do tipo GET (quando pedem informações).
     @GetMapping
-    public List<Categoria> listarCategorias() {
-        // Vai no banco, pega todas as categorias e devolve em formato de lista
-        return repository.findAll();
+    public ResponseEntity<List<Categoria>> listarCategorias() {
+        List<Categoria> categorias = repository.findAll();
+        return ResponseEntity.ok(categorias);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Categoria> atualizarCategoria(@PathVariable Long id, @RequestBody Categoria dadosAtualizados) {
+        return repository.findById(id)
+                .map(categoriaExistente -> {
+                    categoriaExistente.setNome(dadosAtualizados.getNome());
+                    Categoria categoriaAtualizada = repository.save(categoriaExistente);
+                    return ResponseEntity.ok(categoriaAtualizada);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deletarCategoria(@PathVariable Long id) {
+        if (!repository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        repository.deleteById(id);
+        return ResponseEntity.noContent().build();
     }
 }

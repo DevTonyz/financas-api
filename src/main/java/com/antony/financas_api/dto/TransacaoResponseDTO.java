@@ -10,12 +10,10 @@ public record TransacaoResponseDTO(
         Long id,
         String descricao,
         BigDecimal valor,
-        @JsonFormat(pattern = "dd/MM/yyyy") // <-- Mágica da formatação de data!
+        @JsonFormat(pattern = "dd/MM/yyyy")
         LocalDate data,
-        String nomeCategoria // Trazemos o nome limpo em vez de um objeto complexo
+        String nomeCategoria
 ) {
-    // Este construtor funciona como um "tradutor".
-    // Ele pega a Entidade pesada do banco e extrai apenas o suco para a internet.
     public TransacaoResponseDTO(Transacao transacao) {
         this(
                 transacao.getId(),

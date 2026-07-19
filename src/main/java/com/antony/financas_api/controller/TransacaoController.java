@@ -4,6 +4,8 @@ import com.antony.financas_api.dto.TransacaoRequestDTO;
 import com.antony.financas_api.dto.TransacaoResponseDTO;
 import com.antony.financas_api.repository.TransacaoRepository;
 import com.antony.financas_api.service.TransacaoService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -12,15 +14,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springdoc.core.annotations.ParameterObject;
-
-import java.math.BigDecimal;
+import com.antony.financas_api.dto.ResumoResponseDTO;
 import java.time.LocalDate;
 import java.util.List;
 
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearer-key")
-
 @RestController
 @RequestMapping("/transacoes")
+@SecurityRequirement(name = "bearer-key")
 public class TransacaoController {
 
     @Autowired
@@ -30,40 +30,77 @@ public class TransacaoController {
     private TransacaoRepository repository;
 
     @PostMapping
-    public List<TransacaoResponseDTO> criarTransacao(@Valid @RequestBody TransacaoRequestDTO dto) {
-        return service.salvarTransacao(dto);
+    public ResponseEntity<List<TransacaoResponseDTO>> criarTransacao(
+            @Valid @RequestBody TransacaoRequestDTO dto,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        List<TransacaoResponseDTO> transacoes = service.salvarTransacao(dto, idUsuario);
+        return ResponseEntity.status(201).body(transacoes);
     }
 
-    // AQUI: @ParameterObject adicionado antes do @PageableDefault
     @GetMapping
-    public Page<TransacaoResponseDTO> listarTransacoes(@ParameterObject @PageableDefault(size = 10, sort = {"data"}) Pageable paginacao) {
-        return repository.findAll(paginacao).map(TransacaoResponseDTO::new);
+    public ResponseEntity<Page<TransacaoResponseDTO>> listarTransacoes(
+            @ParameterObject @PageableDefault(size = 10, sort = {"data"}) Pageable paginacao,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        Page<TransacaoResponseDTO> page = repository.findAllByUsuarioId(idUsuario, paginacao).map(TransacaoResponseDTO::new);
+        return ResponseEntity.ok(page);
     }
 
-    // AQUI TAMBÉM: @ParameterObject adicionado
     @GetMapping("/categoria/{id}")
-    public Page<TransacaoResponseDTO> listarPorCategoria(@PathVariable Long id, @ParameterObject @PageableDefault(size = 10) Pageable paginacao) {
-        return repository.findByCategoriaId(id, paginacao).map(TransacaoResponseDTO::new);
+    public ResponseEntity<Page<TransacaoResponseDTO>> listarPorCategoria(
+            @PathVariable Long id,
+            @ParameterObject @PageableDefault(size = 10) Pageable paginacao,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        Page<TransacaoResponseDTO> page = repository.findByCategoriaIdAndUsuarioId(id, idUsuario, paginacao).map(TransacaoResponseDTO::new);
+        return ResponseEntity.ok(page);
     }
 
-    // E AQUI TAMBÉM: @ParameterObject adicionado
     @GetMapping("/periodo")
-    public Page<TransacaoResponseDTO> listarPorPeriodo(
+    public ResponseEntity<Page<TransacaoResponseDTO>> listarPorPeriodo(
             @RequestParam LocalDate inicio,
             @RequestParam LocalDate fim,
-            @ParameterObject @PageableDefault(size = 10, sort = {"data"}) Pageable paginacao) {
+            @ParameterObject @PageableDefault(size = 10, sort = {"data"}) Pageable paginacao,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        Page<TransacaoResponseDTO> page = repository.findByDataBetweenAndUsuarioId(inicio, fim, idUsuario, paginacao).map(TransacaoResponseDTO::new);
+        return ResponseEntity.ok(page);
+    }
 
-        return repository.findByDataBetween(inicio, fim, paginacao).map(TransacaoResponseDTO::new);
+    @GetMapping("/resumo")
+    public ResponseEntity<ResumoResponseDTO> obterResumo(
+            @RequestParam Integer mes,
+            @RequestParam Integer ano,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        ResumoResponseDTO resumo = service.obterResumoMensal(mes, ano, idUsuario);
+        return ResponseEntity.ok(resumo);
     }
 
     @PutMapping("/{id}")
-    public TransacaoResponseDTO atualizarTransacao(@PathVariable Long id, @Valid @RequestBody TransacaoRequestDTO dto) {
-        return service.atualizarTransacao(id, dto);
+    public ResponseEntity<TransacaoResponseDTO> atualizarTransacao(
+            @PathVariable Long id,
+            @Valid @RequestBody TransacaoRequestDTO dto,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        TransacaoResponseDTO transacaoAtualizada = service.atualizarTransacao(id, dto, idUsuario);
+        return ResponseEntity.ok(transacaoAtualizada);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deletarTransacao(@PathVariable Long id) {
-        service.deletarTransacao(id);
+    public ResponseEntity<Void> deletarTransacao(
+            @PathVariable Long id,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        service.deletarTransacao(id, idUsuario);
         return ResponseEntity.noContent().build();
     }
 }

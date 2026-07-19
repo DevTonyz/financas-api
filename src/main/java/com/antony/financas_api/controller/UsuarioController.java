@@ -21,30 +21,27 @@ public class UsuarioController {
     @Autowired
     private UsuarioRepository repository;
 
-    // Injetamos aquele codificador de senhas que criamos no SecurityConfig
     @Autowired
     private PasswordEncoder passwordEncoder;
 
     @PostMapping
-    public ResponseEntity cadastrar(@RequestBody @Valid DadosCadastroUsuario dados, UriComponentsBuilder uriBuilder) {
-        // 1. Pegamos a senha limpa e transformamos no hash seguro
+    public ResponseEntity<DadosDetalhamentoUsuario> cadastrar(
+            @RequestBody @Valid DadosCadastroUsuario dados,
+            UriComponentsBuilder uriBuilder
+    ) {
         var senhaCriptografada = passwordEncoder.encode(dados.senha());
 
-        // 2. Montamos o objeto usuário
         var usuario = new Usuario();
         usuario.setLogin(dados.login());
         usuario.setSenha(senhaCriptografada);
 
-        // 3. Salvamos no banco
         repository.save(usuario);
 
-        // 4. Devolvemos o status 201 (Created) e mostramos os dados salvos (ocultando a senha, claro)
         var uri = uriBuilder.path("/usuarios/{id}").buildAndExpand(usuario.getId()).toUri();
         return ResponseEntity.created(uri).body(new DadosDetalhamentoUsuario(usuario));
     }
 }
 
-// DTOs auxiliares
 record DadosCadastroUsuario(
         @NotBlank @Email String login,
         @NotBlank String senha

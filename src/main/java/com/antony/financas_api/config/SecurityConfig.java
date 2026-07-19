@@ -24,18 +24,13 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http.csrf(csrf -> csrf.disable())
-                // Configura a API para não guardar sessão (exigência para usar Tokens JWT)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(req -> {
                     req.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll();
                     req.requestMatchers(HttpMethod.POST, "/login").permitAll();
-
-                    // LIBERANDO A ROTA DE CADASTRO:
                     req.requestMatchers(HttpMethod.POST, "/usuarios").permitAll();
-
                     req.anyRequest().authenticated();
                 })
-                // Ensina o Spring a usar o nosso filtro customizado antes do filtro padrão
                 .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
@@ -45,7 +40,6 @@ public class SecurityConfig {
         return configuration.getAuthenticationManager();
     }
 
-    // Ensina ao Spring qual é o algoritmo de criptografia que usaremos nas senhas
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
