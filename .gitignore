@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Ignorar as credenciais reais do banco e JWT
+src/main/resources/application.properties

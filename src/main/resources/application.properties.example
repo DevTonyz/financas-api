@@ -1,0 +1,11 @@
+# Configurações do Banco de Dados (Exemplo)
+spring.datasource.url=jdbc:mysql://localhost:3306/financas_db
+spring.datasource.username=seu_usuario_aqui
+spring.datasource.password=sua_senha_aqui
+
+# Configurações do Hibernate
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
+# Segredo JWT (Exemplo)
+api.security.token.secret=cole_sua_chave_secreta_aqui
