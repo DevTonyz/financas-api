@@ -1,5 +1,6 @@
 package com.antony.financas_api.service;
 
+import com.antony.financas_api.dto.MembroResumoDTO;
 import com.antony.financas_api.dto.ResumoResponseDTO;
 import com.antony.financas_api.dto.TransacaoRequestDTO;
 import com.antony.financas_api.dto.TransacaoResponseDTO;
@@ -166,5 +167,71 @@ public class TransacaoService {
 
         // 3. Busca os dados no banco e converte para o DTO limpo
         return repository.findByGrupoId(idGrupo, paginacao).map(TransacaoResponseDTO::new);
+    }
+
+    public ResumoResponseDTO obterResumoMensalGrupo(Long idGrupo, Integer mes, Integer ano, Long idUsuario) {
+        // 1. Busca e valida o grupo
+        Grupo grupo = grupoRepository.findById(idGrupo)
+                .orElseThrow(() -> new RuntimeException("Grupo não encontrado!"));
+
+        // 2. Trava de Segurança
+        boolean fazParte = grupo.getUsuarios().stream()
+                .anyMatch(u -> u.getId().equals(idUsuario));
+        if (!fazParte) {
+            throw new RuntimeException("Acesso negado: Você não pode ver o resumo deste grupo.");
+        }
+
+        // 3. Monta o calendário do mês
+        YearMonth anoMes = YearMonth.of(ano, mes);
+        LocalDate dataInicio = anoMes.atDay(1);
+        LocalDate dataFim = anoMes.atEndOfMonth();
+
+        // 4. Manda o banco somar tudo
+        BigDecimal totalGasto = repository.somarGastosPorGrupoEPeriodo(idGrupo, dataInicio, dataFim);
+
+        // 5. Se não houver gastos, retorna zero para não dar erro na tela
+        if (totalGasto == null) {
+            totalGasto = BigDecimal.ZERO;
+        }
+
+        return new ResumoResponseDTO(mes, ano, totalGasto);
+    }
+
+    public java.util.List<MembroResumoDTO> obterAcertoDeContas(Long idGrupo, Integer mes, Integer ano, Long idUsuario) {
+        // 1. Busca e valida o grupo (mesma regra de segurança)
+        Grupo grupo = grupoRepository.findById(idGrupo)
+                .orElseThrow(() -> new RuntimeException("Grupo não encontrado!"));
+
+        boolean fazParte = grupo.getUsuarios().stream()
+                .anyMatch(u -> u.getId().equals(idUsuario));
+        if (!fazParte) {
+            throw new RuntimeException("Acesso negado: Você não pode ver o acerto deste grupo.");
+        }
+
+        // 2. Monta o calendário
+        java.time.YearMonth anoMes = java.time.YearMonth.of(ano, mes);
+        java.time.LocalDate dataInicio = anoMes.atDay(1);
+        java.time.LocalDate dataFim = anoMes.atEndOfMonth();
+
+        // 3. Busca todas as transações do mês
+        java.util.List<Transacao> transacoes = repository.findAllByGrupoIdAndDataBetween(idGrupo, dataInicio, dataFim);
+
+        // 4. Agrupa por usuário e soma o valor de cada um (Inteligência do Java Streams)
+        java.util.Map<Usuario, BigDecimal> gastosPorUsuario = transacoes.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        Transacao::getUsuario,
+                        java.util.stream.Collectors.mapping(
+                                Transacao::getValor,
+                                java.util.stream.Collectors.reducing(BigDecimal.ZERO, BigDecimal::add)
+                        )
+                ));
+
+        // 5. Converte o resultado para a nossa lista de DTOs limpa
+        return gastosPorUsuario.entrySet().stream()
+                .map(entry -> new MembroResumoDTO(
+                        entry.getKey().getId(),
+                        entry.getKey().getLogin(),
+                        entry.getValue()))
+                .toList();
     }
 }

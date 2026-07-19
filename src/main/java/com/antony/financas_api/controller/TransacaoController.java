@@ -1,5 +1,6 @@
 package com.antony.financas_api.controller;
 
+import com.antony.financas_api.dto.MembroResumoDTO;
 import com.antony.financas_api.dto.TransacaoRequestDTO;
 import com.antony.financas_api.dto.TransacaoResponseDTO;
 import com.antony.financas_api.repository.TransacaoRepository;
@@ -93,6 +94,30 @@ public class TransacaoController {
         Long idUsuario = (Long) request.getAttribute("idUsuario");
         Page<TransacaoResponseDTO> page = service.listarPorGrupo(idGrupo, idUsuario, paginacao);
         return ResponseEntity.ok(page);
+    }
+
+    @GetMapping("/grupo/{idGrupo}/acerto")
+    public ResponseEntity<List<MembroResumoDTO>> obterAcertoDeContas(
+            @PathVariable Long idGrupo,
+            @RequestParam Integer mes,
+            @RequestParam Integer ano,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        List<MembroResumoDTO> acerto = service.obterAcertoDeContas(idGrupo, mes, ano, idUsuario);
+        return ResponseEntity.ok(acerto);
+    }
+
+    @GetMapping("/grupo/{idGrupo}/resumo")
+    public ResponseEntity<ResumoResponseDTO> obterResumoDoGrupo(
+            @PathVariable Long idGrupo,
+            @RequestParam Integer mes,
+            @RequestParam Integer ano,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        ResumoResponseDTO resumo = service.obterResumoMensalGrupo(idGrupo, mes, ano, idUsuario);
+        return ResponseEntity.ok(resumo);
     }
 
     @PutMapping("/{id}")

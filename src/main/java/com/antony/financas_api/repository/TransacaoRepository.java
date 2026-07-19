@@ -20,6 +20,16 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
 
     Page<Transacao> findByGrupoId(Long grupoId, Pageable paginacao);
 
+    // NOVO: Busca a lista completa de transações de um grupo em um determinado período
+    java.util.List<Transacao> findAllByGrupoIdAndDataBetween(Long grupoId, java.time.LocalDate dataInicio, java.time.LocalDate dataFim);
+
     @Query("SELECT SUM(t.valor) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.data BETWEEN :inicio AND :fim")
     BigDecimal somarGastosPorPeriodo(@Param("inicio") LocalDate inicio, @Param("fim") LocalDate fim, @Param("usuarioId") Long usuarioId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT SUM(t.valor) FROM Transacao t WHERE t.grupo.id = :grupoId AND t.data >= :dataInicio AND t.data <= :dataFim")
+    java.math.BigDecimal somarGastosPorGrupoEPeriodo(
+            @org.springframework.data.repository.query.Param("grupoId") Long grupoId,
+            @org.springframework.data.repository.query.Param("dataInicio") java.time.LocalDate dataInicio,
+            @org.springframework.data.repository.query.Param("dataFim") java.time.LocalDate dataFim
+    );
 }
