@@ -61,7 +61,7 @@ public class GrupoController {
             HttpServletRequest request
     ) {
         Long idUsuario = (Long) request.getAttribute("idUsuario");
-        return ResponseEntity.ok(service.adicionarMembroPorLogin(idGrupo, dto.login(), idUsuario));
+        return ResponseEntity.ok(service.adicionarMembroPorLogin(idGrupo, dto.login(), dto.dataEntrada(), idUsuario));
     }
 
     // Rota antiga, pelo id do usuário. O app usa a de cima, por e-mail
@@ -124,6 +124,7 @@ public class GrupoController {
         return ResponseEntity.noContent().build();
     }
 
-    public record NovoMembroDTO(@NotBlank @Email String login) {
+    // dataEntrada ("yyyy-MM-dd") é opcional: sem ela, a pessoa entra hoje
+    public record NovoMembroDTO(@NotBlank @Email String login, LocalDate dataEntrada) {
     }
 }

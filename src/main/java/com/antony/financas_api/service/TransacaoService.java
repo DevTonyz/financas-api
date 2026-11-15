@@ -232,16 +232,15 @@ public class TransacaoService {
         }
 
         BigDecimal total = transacoes.stream().map(Transacao::getValor).reduce(BigDecimal.ZERO, BigDecimal::add);
-        int n = membros.size();
-        BigDecimal parteJusta = total.divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP);
-
-        // Partes em centavos exatos (ver Divisao): assim os saldos somam exatamente 0
-        List<BigDecimal> partes = Divisao.emPartes(total, n);
+        // Partes em centavos exatos, só entre quem já estava no grupo na data de cada gasto
+        // (ver DivisaoPorEntrada): assim os saldos somam exatamente 0
+        java.util.Map<Long, BigDecimal> partes = grupoService.partesJustas(grupo, membros, transacoes);
+        // Com datas de entrada, cada membro pode ter uma parte diferente: parteJusta é a de quem consulta
+        BigDecimal parteJusta = partes.getOrDefault(idUsuario, BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
 
         List<MembroResumoDTO> linhas = new ArrayList<>();
-        for (int i = 0; i < n; i++) {
-            Usuario membro = membros.get(i);
-            BigDecimal parte = partes.get(i);
+        for (Usuario membro : membros) {
+            BigDecimal parte = partes.get(membro.getId());
             BigDecimal pago = pagoPorMembro.get(membro.getId()).setScale(2, RoundingMode.HALF_UP);
             linhas.add(new MembroResumoDTO(membro.getId(), membro.getLogin(),
                     membro.getId().equals(idUsuario), pago, pago.subtract(parte)));

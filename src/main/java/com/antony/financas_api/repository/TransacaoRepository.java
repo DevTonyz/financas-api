@@ -28,9 +28,8 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
 
     Page<Transacao> findByGrupoIdAndDataBetween(Long grupoId, LocalDate inicio, LocalDate fim, Pageable paginacao);
 
-    // Total pago por usuário num grupo até uma data. Cada linha vem como [usuarioId, soma]
-    @Query("SELECT t.usuario.id, SUM(t.valor) FROM Transacao t WHERE t.grupo.id = :grupoId AND t.data <= :ate GROUP BY t.usuario.id")
-    java.util.List<Object[]> somarPorUsuarioNoGrupo(@Param("grupoId") Long grupoId, @Param("ate") LocalDate ate);
+    // Gastos do grupo até uma data. O saldo precisa da data de cada um para saber quem divide (data de entrada)
+    java.util.List<Transacao> findAllByGrupoIdAndDataLessThanEqual(Long grupoId, LocalDate ate);
 
     // @Modifying: é um UPDATE, não uma consulta. Tira do grupo os gastos de quem saiu dele
     @Modifying

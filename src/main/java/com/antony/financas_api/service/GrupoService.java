@@ -8,7 +8,10 @@ import com.antony.financas_api.dto.PagamentoDTOs.PagamentoResponse;
 import com.antony.financas_api.dto.PagamentoDTOs.SaldoDoMembro;
 import com.antony.financas_api.dto.PagamentoDTOs.SaldosResponse;
 import com.antony.financas_api.dto.PagamentoDTOs.Sugestao;
+import com.antony.financas_api.model.EntradaNoGrupo;
 import com.antony.financas_api.model.Pagamento;
+import com.antony.financas_api.model.Transacao;
+import com.antony.financas_api.repository.EntradaNoGrupoRepository;
 import com.antony.financas_api.repository.PagamentoRepository;
 import com.antony.financas_api.exception.AcessoNegadoException;
 import com.antony.financas_api.exception.ConflitoException;
@@ -46,6 +49,9 @@ public class GrupoService {
     @Autowired
     private PagamentoRepository pagamentoRepository;
 
+    @Autowired
+    private EntradaNoGrupoRepository entradaRepository;
+
     // 404 se o grupo não existe, 403 se existe mas o usuário não é membro
     public Grupo buscarDoMembro(Long idGrupo, Long idUsuario) {
         Grupo grupo = grupoRepository.findById(idGrupo)
@@ -65,6 +71,8 @@ public class GrupoService {
         grupo.setDescricao(dto.descricao() == null || dto.descricao().isBlank() ? null : dto.descricao().trim());
         // Quem cria já entra como membro (o JPA preenche a tabela grupo_usuarios)
         grupo.getUsuarios().add(criador);
+        // O criador não ganha data de entrada: conta como "desde sempre" e divide até gastos lançados
+        // com data anterior à criação do grupo (comum para registrar despesas que já aconteceram)
         return new GrupoResponseDTO(grupoRepository.save(grupo));
     }
 
@@ -74,19 +82,26 @@ public class GrupoService {
     }
 
     public GrupoDetalheDTO detalhar(Long idGrupo, Long idUsuario) {
-        return new GrupoDetalheDTO(buscarDoMembro(idGrupo, idUsuario), idUsuario);
+        return new GrupoDetalheDTO(buscarDoMembro(idGrupo, idUsuario), idUsuario, entradas(idGrupo));
     }
 
     @Transactional
-    public GrupoDetalheDTO adicionarMembroPorLogin(Long idGrupo, String login, Long idUsuario) {
+    // dataEntrada é opcional (padrão: hoje). Serve para quem entrou uns dias antes de ser adicionado no app
+    public GrupoDetalheDTO adicionarMembroPorLogin(Long idGrupo, String login, LocalDate dataEntrada, Long idUsuario) {
         Grupo grupo = buscarDoMembro(idGrupo, idUsuario);
         Usuario novoMembro = usuarioRepository.findFirstByLoginIgnoreCase(login.trim())
                 .orElseThrow(() -> new EntityNotFoundException("Nenhuma conta com o e-mail " + login.trim()));
         if (grupo.getUsuarios().contains(novoMembro)) {
             throw new ConflitoException(novoMembro.getLogin() + " já faz parte do grupo");
         }
+        LocalDate entrada = dataEntrada != null ? dataEntrada : LocalDate.now();
+        if (entrada.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("A data de entrada não pode ser no futuro.");
+        }
         grupo.getUsuarios().add(novoMembro);
-        return new GrupoDetalheDTO(grupoRepository.save(grupo), idUsuario);
+        Grupo salvo = grupoRepository.save(grupo);
+        entradaRepository.save(new EntradaNoGrupo(idGrupo, novoMembro.getId(), entrada));
+        return new GrupoDetalheDTO(salvo, idUsuario, entradas(idGrupo));
     }
 
     // Mantido para quem já usava a rota antiga, que recebe o id do usuário
@@ -95,7 +110,9 @@ public class GrupoService {
         Grupo grupo = buscarDoMembro(idGrupo, idUsuario);
         Usuario novoMembro = usuarioRepository.findById(idNovoMembro)
                 .orElseThrow(() -> new EntityNotFoundException("Usuário a ser adicionado não encontrado"));
-        grupo.getUsuarios().add(novoMembro);
+        if (grupo.getUsuarios().add(novoMembro)) {
+            entradaRepository.save(new EntradaNoGrupo(idGrupo, novoMembro.getId(), LocalDate.now()));
+        }
         return new GrupoResponseDTO(grupoRepository.save(grupo));
     }
 
@@ -114,6 +131,8 @@ public class GrupoService {
         }
         // Os acertos em que a pessoa aparece deixam de valer junto com a saída
         pagamentoRepository.apagarDoMembro(idGrupo, idUsuario);
+        // Se voltar um dia, entra com a data nova
+        entradaRepository.apagarDoMembro(idGrupo, idUsuario);
         // Os gastos de quem sai deixam de ser do grupo (continuam na conta da pessoa).
         // Assim o acerto de contas só envolve quem ainda é membro e os saldos continuam somando 0
         transacaoRepository.desligarDoGrupo(idGrupo, idUsuario);
@@ -123,6 +142,7 @@ public class GrupoService {
             // (senão a chave estrangeira impede apagar)
             transacaoRepository.desligarTodasDoGrupo(idGrupo);
             pagamentoRepository.apagarDoGrupo(idGrupo);
+            entradaRepository.apagarDoGrupo(idGrupo);
             grupoRepository.delete(grupo);
         } else {
             grupoRepository.save(grupo);
@@ -135,9 +155,22 @@ public class GrupoService {
         return calcularSaldos(buscarDoMembro(idGrupo, idUsuario), idUsuario);
     }
 
+    // id do usuário → data em que entrou. Quem não aparece já era membro antes desta regra e divide tudo
+    public Map<Long, LocalDate> entradas(Long idGrupo) {
+        Map<Long, LocalDate> mapa = new HashMap<>();
+        entradaRepository.findAllByGrupoId(idGrupo).forEach(e -> mapa.put(e.getUsuarioId(), e.getDataEntrada()));
+        return mapa;
+    }
+
+    // Parte justa de cada membro num conjunto de gastos, respeitando a data de entrada (ver DivisaoPorEntrada)
+    public Map<Long, BigDecimal> partesJustas(Grupo grupo, List<Usuario> membrosEmOrdem, List<Transacao> gastos) {
+        return DivisaoPorEntrada.partes(membrosEmOrdem, entradas(grupo.getId()), gastos);
+    }
+
     /**
-     * Saldo de cada membro (gastos com data até hoje) = o que pagou − a parte dele no total do grupo
+     * Saldo de cada membro (gastos com data até hoje) = o que pagou − a parte dele nos gastos que divide
      *                       + pagamentos que fez − pagamentos que recebeu.
+     * Cada gasto só é dividido entre quem já estava no grupo na data dele: quem entra não herda dívida antiga.
      * Ex.: o total foi 140 (70 para cada); A pagou 100 → +30, B pagou 40 → −30.
      * Se B registra que pagou 30 para A, os dois ficam em 0.
      * A soma dos saldos é sempre 0.
@@ -146,20 +179,18 @@ public class GrupoService {
         List<Usuario> membros = grupo.getUsuarios().stream()
                 .sorted(Comparator.comparing(Usuario::getLogin)).toList();
 
-        Map<Long, BigDecimal> pago = new HashMap<>();
-        BigDecimal total = BigDecimal.ZERO;
         // Só gastos até hoje: parcelas futuras do crédito entram no saldo quando chega o mês delas
-        for (Object[] linha : transacaoRepository.somarPorUsuarioNoGrupo(grupo.getId(), LocalDate.now())) {
-            pago.put((Long) linha[0], (BigDecimal) linha[1]);
-            total = total.add((BigDecimal) linha[1]);
+        List<Transacao> gastos = transacaoRepository.findAllByGrupoIdAndDataLessThanEqual(grupo.getId(), LocalDate.now());
+        Map<Long, BigDecimal> pago = new HashMap<>();
+        for (Transacao t : gastos) {
+            pago.merge(t.getUsuario().getId(), t.getValor(), BigDecimal::add);
         }
 
         // Começa com "pagou − parte justa", com a divisão em centavos exatos
-        List<BigDecimal> partes = Divisao.emPartes(total, membros.size());
+        Map<Long, BigDecimal> partes = partesJustas(grupo, membros, gastos);
         Map<Long, BigDecimal> saldo = new HashMap<>();
-        for (int i = 0; i < membros.size(); i++) {
-            Long id = membros.get(i).getId();
-            saldo.put(id, pago.getOrDefault(id, BigDecimal.ZERO).subtract(partes.get(i)));
+        for (Usuario m : membros) {
+            saldo.put(m.getId(), pago.getOrDefault(m.getId(), BigDecimal.ZERO).subtract(partes.get(m.getId())));
         }
 
         // Pagamentos: quem pagou diminui a dívida (saldo sobe); quem recebeu diminui o crédito (saldo desce)
