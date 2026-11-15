@@ -7,6 +7,8 @@ import com.antony.financas_api.model.Usuario;
 import com.antony.financas_api.repository.GrupoRepository;
 import com.antony.financas_api.repository.UsuarioRepository;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import com.antony.financas_api.exception.AcessoNegadoException;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,7 +34,7 @@ public class GrupoController {
         // 1. Descobre quem é o usuário logado
         Long idUsuario = (Long) request.getAttribute("idUsuario");
         Usuario usuarioLogado = usuarioRepository.findById(idUsuario)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
 
         // 2. Monta o novo Grupo
         Grupo novoGrupo = new Grupo();
@@ -63,19 +65,19 @@ public class GrupoController {
 
         // 2. Busca o grupo no banco de dados
         Grupo grupo = grupoRepository.findById(idGrupo)
-                .orElseThrow(() -> new RuntimeException("Grupo não encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Grupo não encontrado"));
 
         // 3. Regra de Segurança: Verifica se você realmente faz parte desse grupo antes de adicionar alguém
         boolean fazParte = grupo.getUsuarios().stream()
                 .anyMatch(u -> u.getId().equals(idUsuarioLogado));
 
         if (!fazParte) {
-            throw new RuntimeException("Acesso negado: Você não faz parte deste grupo.");
+            throw new AcessoNegadoException("Acesso negado: Você não faz parte deste grupo.");
         }
 
         // 4. Busca a conta da pessoa que será adicionada
         Usuario novoMembro = usuarioRepository.findById(idNovoMembro)
-                .orElseThrow(() -> new RuntimeException("Usuário a ser adicionado não encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Usuário a ser adicionado não encontrado"));
 
         // 5. Adiciona o novo membro e salva (o JPA atualiza a tabela intermediária automaticamente)
         grupo.getUsuarios().add(novoMembro);

@@ -120,6 +120,15 @@ public class TransacaoController {
         return ResponseEntity.ok(resumo);
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<TransacaoResponseDTO> buscarTransacao(
+            @PathVariable Long id,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        return ResponseEntity.ok(service.buscarTransacao(id, idUsuario));
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<TransacaoResponseDTO> atualizarTransacao(
             @PathVariable Long id,

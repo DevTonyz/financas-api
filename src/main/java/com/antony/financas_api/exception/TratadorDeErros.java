@@ -20,6 +20,12 @@ public class TratadorDeErros {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
     }
 
+    @ExceptionHandler(AcessoNegadoException.class)
+    public ResponseEntity<String> tratarErro403(AcessoNegadoException ex) {
+        // Recurso de outra pessoa: 403 com a mensagem, em vez do 500 de antes
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<List<DadosErroValidacao>> tratarErro400(MethodArgumentNotValidException ex) {
         var erros = ex.getFieldErrors().stream().map(DadosErroValidacao::new).toList();

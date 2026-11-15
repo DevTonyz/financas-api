@@ -13,6 +13,7 @@ import com.antony.financas_api.repository.CategoriaRepository;
 import com.antony.financas_api.repository.GrupoRepository;
 import com.antony.financas_api.repository.TransacaoRepository;
 import com.antony.financas_api.repository.UsuarioRepository;
+import com.antony.financas_api.exception.AcessoNegadoException;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -42,7 +43,7 @@ public class TransacaoService {
 
     public List<TransacaoResponseDTO> salvarTransacao(TransacaoRequestDTO dto, Long idUsuario) {
         Usuario usuario = usuarioRepository.findById(idUsuario)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado!"));
+                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
 
         Categoria categoria = categoriaRepository.findByIdAndUsuarioId(dto.categoriaId(), idUsuario)
                 .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada"));
@@ -50,12 +51,12 @@ public class TransacaoService {
         Grupo grupo = null;
         if (dto.grupoId() != null) {
             grupo = grupoRepository.findById(dto.grupoId())
-                    .orElseThrow(() -> new RuntimeException("Grupo não encontrado!"));
+                    .orElseThrow(() -> new EntityNotFoundException("Grupo não encontrado"));
 
             boolean fazParte = grupo.getUsuarios().stream()
                     .anyMatch(u -> u.getId().equals(idUsuario));
             if (!fazParte) {
-                throw new RuntimeException("Acesso negado: Você não faz parte deste grupo.");
+                throw new AcessoNegadoException("Acesso negado: Você não faz parte deste grupo.");
             }
         }
 
@@ -95,13 +96,26 @@ public class TransacaoService {
         return transacoesSalvas.stream().map(TransacaoResponseDTO::new).toList();
     }
 
-    public TransacaoResponseDTO atualizarTransacao(Long id, TransacaoRequestDTO dto, Long idUsuario) {
-        Transacao transacaoExistente = repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Transação não encontrada!"));
-
-        if (!transacaoExistente.getUsuario().getId().equals(idUsuario)) {
-            throw new RuntimeException("Acesso negado.");
+    // Busca a transação garantindo que é do usuário: 404 se não existe, 403 se é de outra pessoa
+    private Transacao buscarDoUsuario(Long id, Long idUsuario) {
+        Transacao transacao = repository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Transação não encontrada"));
+        if (!transacao.getUsuario().getId().equals(idUsuario)) {
+            throw new AcessoNegadoException("Acesso negado.");
         }
+        return transacao;
+    }
+
+    public TransacaoResponseDTO buscarTransacao(Long id, Long idUsuario) {
+        // GET de transação alheia responde 404 (não revela que o id existe)
+        Transacao transacao = repository.findById(id)
+                .filter(t -> t.getUsuario().getId().equals(idUsuario))
+                .orElseThrow(() -> new EntityNotFoundException("Transação não encontrada"));
+        return new TransacaoResponseDTO(transacao);
+    }
+
+    public TransacaoResponseDTO atualizarTransacao(Long id, TransacaoRequestDTO dto, Long idUsuario) {
+        Transacao transacaoExistente = buscarDoUsuario(id, idUsuario);
 
         Categoria categoria = categoriaRepository.findByIdAndUsuarioId(dto.categoriaId(), idUsuario)
                 .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada"));
@@ -109,12 +123,12 @@ public class TransacaoService {
         Grupo grupo = null;
         if (dto.grupoId() != null) {
             grupo = grupoRepository.findById(dto.grupoId())
-                    .orElseThrow(() -> new RuntimeException("Grupo não encontrado!"));
+                    .orElseThrow(() -> new EntityNotFoundException("Grupo não encontrado"));
 
             boolean fazParte = grupo.getUsuarios().stream()
                     .anyMatch(u -> u.getId().equals(idUsuario));
             if (!fazParte) {
-                throw new RuntimeException("Acesso negado: Você não faz parte deste grupo.");
+                throw new AcessoNegadoException("Acesso negado: Você não faz parte deste grupo.");
             }
         }
 
@@ -130,12 +144,7 @@ public class TransacaoService {
     }
 
     public void deletarTransacao(Long id, Long idUsuario) {
-        Transacao transacaoExistente = repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Transação não encontrada!"));
-
-        if (!transacaoExistente.getUsuario().getId().equals(idUsuario)) {
-            throw new RuntimeException("Acesso negado.");
-        }
+        Transacao transacaoExistente = buscarDoUsuario(id, idUsuario);
 
         repository.delete(transacaoExistente);
     }
@@ -157,13 +166,13 @@ public class TransacaoService {
     public Page<TransacaoResponseDTO> listarPorGrupo(Long idGrupo, Long idUsuario, Pageable paginacao) {
         // 1. Busca o grupo
         Grupo grupo = grupoRepository.findById(idGrupo)
-                .orElseThrow(() -> new RuntimeException("Grupo não encontrado!"));
+                .orElseThrow(() -> new EntityNotFoundException("Grupo não encontrado"));
 
         // 2. Trava de segurança: você realmente faz parte dessa casa?
         boolean fazParte = grupo.getUsuarios().stream()
                 .anyMatch(u -> u.getId().equals(idUsuario));
         if (!fazParte) {
-            throw new RuntimeException("Acesso negado: Você não pode ver as contas deste grupo.");
+            throw new AcessoNegadoException("Acesso negado: Você não pode ver as contas deste grupo.");
         }
 
         // 3. Busca os dados no banco e converte para o DTO limpo
@@ -173,13 +182,13 @@ public class TransacaoService {
     public ResumoResponseDTO obterResumoMensalGrupo(Long idGrupo, Integer mes, Integer ano, Long idUsuario) {
         // 1. Busca e valida o grupo
         Grupo grupo = grupoRepository.findById(idGrupo)
-                .orElseThrow(() -> new RuntimeException("Grupo não encontrado!"));
+                .orElseThrow(() -> new EntityNotFoundException("Grupo não encontrado"));
 
         // 2. Trava de Segurança
         boolean fazParte = grupo.getUsuarios().stream()
                 .anyMatch(u -> u.getId().equals(idUsuario));
         if (!fazParte) {
-            throw new RuntimeException("Acesso negado: Você não pode ver o resumo deste grupo.");
+            throw new AcessoNegadoException("Acesso negado: Você não pode ver o resumo deste grupo.");
         }
 
         // 3. Monta o calendário do mês
@@ -201,12 +210,12 @@ public class TransacaoService {
     public java.util.List<MembroResumoDTO> obterAcertoDeContas(Long idGrupo, Integer mes, Integer ano, Long idUsuario) {
         // 1. Busca e valida o grupo (mesma regra de segurança)
         Grupo grupo = grupoRepository.findById(idGrupo)
-                .orElseThrow(() -> new RuntimeException("Grupo não encontrado!"));
+                .orElseThrow(() -> new EntityNotFoundException("Grupo não encontrado"));
 
         boolean fazParte = grupo.getUsuarios().stream()
                 .anyMatch(u -> u.getId().equals(idUsuario));
         if (!fazParte) {
-            throw new RuntimeException("Acesso negado: Você não pode ver o acerto deste grupo.");
+            throw new AcessoNegadoException("Acesso negado: Você não pode ver o acerto deste grupo.");
         }
 
         // 2. Monta o calendário
