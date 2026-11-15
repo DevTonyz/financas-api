@@ -15,4 +15,9 @@ public class Categoria {
     private Long id;
 
     private String nome;
+
+    // Dono da categoria. Pode ser nulo só para não quebrar categorias antigas, criadas antes de existir dono.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private Usuario usuario;
 }

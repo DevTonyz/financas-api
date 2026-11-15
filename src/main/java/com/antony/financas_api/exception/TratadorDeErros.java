@@ -15,8 +15,9 @@ import java.util.List;
 public class TratadorDeErros {
 
     @ExceptionHandler(EntityNotFoundException.class)
-    public ResponseEntity<Void> tratarErro404() {
-        return ResponseEntity.notFound().build();
+    public ResponseEntity<String> tratarErro404(EntityNotFoundException ex) {
+        // Devolve a mensagem (ex.: "Categoria não encontrada") para o app poder mostrar
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

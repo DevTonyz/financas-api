@@ -1,6 +1,8 @@
 package com.antony.financas_api.controller;
 
+import com.antony.financas_api.model.Categoria;
 import com.antony.financas_api.model.Usuario;
+import com.antony.financas_api.repository.CategoriaRepository;
 import com.antony.financas_api.repository.UsuarioRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -10,11 +12,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/usuarios")
@@ -26,6 +31,15 @@ public class UsuarioController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private CategoriaRepository categoriaRepository;
+
+    // Todo usuário novo já começa com estas categorias
+    private static final List<String> CATEGORIAS_PADRAO = List.of(
+            "Alimentação", "Transporte", "Moradia", "Lazer", "Saúde", "Educação", "Outros");
+
+    // @Transactional: se falhar ao criar as categorias, o usuário também não fica salvo pela metade
+    @Transactional
     @PostMapping
     public ResponseEntity<?> cadastrar(
             @RequestBody @Valid DadosCadastroUsuario dados,
@@ -43,6 +57,14 @@ public class UsuarioController {
         usuario.setSenha(senhaCriptografada);
 
         repository.save(usuario);
+
+        var categorias = CATEGORIAS_PADRAO.stream().map(nome -> {
+            var categoria = new Categoria();
+            categoria.setNome(nome);
+            categoria.setUsuario(usuario);
+            return categoria;
+        }).toList();
+        categoriaRepository.saveAll(categorias);
 
         var uri = uriBuilder.path("/usuarios/{id}").buildAndExpand(usuario.getId()).toUri();
         return ResponseEntity.created(uri).body(new DadosDetalhamentoUsuario(usuario));

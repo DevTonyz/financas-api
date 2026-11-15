@@ -14,6 +14,8 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
 
     Page<Transacao> findAllByUsuarioId(Long usuarioId, Pageable paginacao);
 
+    boolean existsByCategoriaId(Long categoriaId);
+
     Page<Transacao> findByCategoriaIdAndUsuarioId(Long categoriaId, Long usuarioId, Pageable paginacao);
 
     Page<Transacao> findByDataBetweenAndUsuarioId(LocalDate dataInicio, LocalDate dataFim, Long usuarioId, Pageable paginacao);

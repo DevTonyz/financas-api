@@ -13,6 +13,7 @@ import com.antony.financas_api.repository.CategoriaRepository;
 import com.antony.financas_api.repository.GrupoRepository;
 import com.antony.financas_api.repository.TransacaoRepository;
 import com.antony.financas_api.repository.UsuarioRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
@@ -43,8 +44,8 @@ public class TransacaoService {
         Usuario usuario = usuarioRepository.findById(idUsuario)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado!"));
 
-        Categoria categoria = categoriaRepository.findById(dto.categoriaId())
-                .orElseThrow(() -> new RuntimeException("Categoria não encontrada!"));
+        Categoria categoria = categoriaRepository.findByIdAndUsuarioId(dto.categoriaId(), idUsuario)
+                .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada"));
 
         Grupo grupo = null;
         if (dto.grupoId() != null) {
@@ -102,8 +103,8 @@ public class TransacaoService {
             throw new RuntimeException("Acesso negado.");
         }
 
-        Categoria categoria = categoriaRepository.findById(dto.categoriaId())
-                .orElseThrow(() -> new RuntimeException("Categoria não encontrada!"));
+        Categoria categoria = categoriaRepository.findByIdAndUsuarioId(dto.categoriaId(), idUsuario)
+                .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada"));
 
         Grupo grupo = null;
         if (dto.grupoId() != null) {
