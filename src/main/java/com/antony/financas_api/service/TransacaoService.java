@@ -235,16 +235,13 @@ public class TransacaoService {
         int n = membros.size();
         BigDecimal parteJusta = total.divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP);
 
-        // Divisão em centavos: 100 entre 3 = 33,34 + 33,33 + 33,33. Os centavos que sobram vão para
-        // os primeiros da lista, assim as partes somam exatamente o total e os saldos somam 0
-        long totalCentavos = total.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact();
-        long baseCentavos = totalCentavos / n;
-        long sobra = totalCentavos % n;
+        // Partes em centavos exatos (ver Divisao): assim os saldos somam exatamente 0
+        List<BigDecimal> partes = Divisao.emPartes(total, n);
 
         List<MembroResumoDTO> linhas = new ArrayList<>();
         for (int i = 0; i < n; i++) {
             Usuario membro = membros.get(i);
-            BigDecimal parte = BigDecimal.valueOf(baseCentavos + (i < sobra ? 1 : 0), 2);
+            BigDecimal parte = partes.get(i);
             BigDecimal pago = pagoPorMembro.get(membro.getId()).setScale(2, RoundingMode.HALF_UP);
             linhas.add(new MembroResumoDTO(membro.getId(), membro.getLogin(),
                     membro.getId().equals(idUsuario), pago, pago.subtract(parte)));

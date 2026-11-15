@@ -3,6 +3,9 @@ package com.antony.financas_api.controller;
 import com.antony.financas_api.dto.GrupoDetalheDTO;
 import com.antony.financas_api.dto.GrupoRequestDTO;
 import com.antony.financas_api.dto.GrupoResponseDTO;
+import com.antony.financas_api.dto.PagamentoDTOs.PagamentoRequest;
+import com.antony.financas_api.dto.PagamentoDTOs.PagamentoResponse;
+import com.antony.financas_api.dto.PagamentoDTOs.SaldosResponse;
 import com.antony.financas_api.service.GrupoService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
+import java.time.LocalDate;
 import java.util.List;
 
 // As regras (só membro mexe no grupo, 404/403/409) ficam no GrupoService
@@ -76,6 +80,47 @@ public class GrupoController {
     public ResponseEntity<Void> sairDoGrupo(@PathVariable Long idGrupo, HttpServletRequest request) {
         Long idUsuario = (Long) request.getAttribute("idUsuario");
         service.sair(idGrupo, idUsuario);
+        return ResponseEntity.noContent().build();
+    }
+
+    // Saldo acumulado de cada membro (todos os meses, já descontando os pagamentos) e sugestões de acerto
+    @GetMapping("/{idGrupo}/saldos")
+    public ResponseEntity<SaldosResponse> saldos(@PathVariable Long idGrupo, HttpServletRequest request) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        return ResponseEntity.ok(service.saldos(idGrupo, idUsuario));
+    }
+
+    // Pagamentos entre membros num período (o app usa o mês). A data entra em "yyyy-MM-dd"
+    @GetMapping("/{idGrupo}/pagamentos")
+    public ResponseEntity<List<PagamentoResponse>> listarPagamentos(
+            @PathVariable Long idGrupo,
+            @RequestParam LocalDate inicio,
+            @RequestParam LocalDate fim,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        return ResponseEntity.ok(service.listarPagamentos(idGrupo, inicio, fim, idUsuario));
+    }
+
+    // "Fulano pagou R$ X para ciclano". Não é gasto: só mexe nos saldos
+    @PostMapping("/{idGrupo}/pagamentos")
+    public ResponseEntity<PagamentoResponse> registrarPagamento(
+            @PathVariable Long idGrupo,
+            @RequestBody @Valid PagamentoRequest dto,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        return ResponseEntity.status(201).body(service.registrarPagamento(idGrupo, dto, idUsuario));
+    }
+
+    @DeleteMapping("/{idGrupo}/pagamentos/{idPagamento}")
+    public ResponseEntity<Void> excluirPagamento(
+            @PathVariable Long idGrupo,
+            @PathVariable Long idPagamento,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        service.excluirPagamento(idGrupo, idPagamento, idUsuario);
         return ResponseEntity.noContent().build();
     }
 
