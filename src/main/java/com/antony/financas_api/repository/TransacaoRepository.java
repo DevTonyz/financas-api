@@ -4,6 +4,7 @@ import com.antony.financas_api.model.Transacao;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -24,6 +25,17 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     Page<Transacao> findByDataBetweenAndUsuarioId(LocalDate dataInicio, LocalDate dataFim, Long usuarioId, Pageable paginacao);
 
     Page<Transacao> findByGrupoId(Long grupoId, Pageable paginacao);
+
+    Page<Transacao> findByGrupoIdAndDataBetween(Long grupoId, LocalDate inicio, LocalDate fim, Pageable paginacao);
+
+    // @Modifying: é um UPDATE, não uma consulta. Tira do grupo os gastos de quem saiu dele
+    @Modifying
+    @Query("UPDATE Transacao t SET t.grupo = null WHERE t.grupo.id = :grupoId AND t.usuario.id = :usuarioId")
+    int desligarDoGrupo(@Param("grupoId") Long grupoId, @Param("usuarioId") Long usuarioId);
+
+    @Modifying
+    @Query("UPDATE Transacao t SET t.grupo = null WHERE t.grupo.id = :grupoId")
+    int desligarTodasDoGrupo(@Param("grupoId") Long grupoId);
 
     // NOVO: Busca a lista completa de transações de um grupo em um determinado período
     java.util.List<Transacao> findAllByGrupoIdAndDataBetween(Long grupoId, java.time.LocalDate dataInicio, java.time.LocalDate dataFim);

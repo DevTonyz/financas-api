@@ -1,5 +1,6 @@
 package com.antony.financas_api.service;
 
+import com.antony.financas_api.dto.AcertoDeContasDTO;
 import com.antony.financas_api.dto.MembroResumoDTO;
 import com.antony.financas_api.dto.ResumoResponseDTO;
 import com.antony.financas_api.dto.TransacaoRequestDTO;
@@ -11,7 +12,6 @@ import com.antony.financas_api.model.Grupo;
 import com.antony.financas_api.model.Transacao;
 import com.antony.financas_api.model.Usuario;
 import com.antony.financas_api.repository.CategoriaRepository;
-import com.antony.financas_api.repository.GrupoRepository;
 import com.antony.financas_api.repository.TransacaoRepository;
 import com.antony.financas_api.repository.UsuarioRepository;
 import com.antony.financas_api.exception.AcessoNegadoException;
@@ -40,7 +40,7 @@ public class TransacaoService {
     private UsuarioRepository usuarioRepository;
 
     @Autowired
-    private GrupoRepository grupoRepository;
+    private GrupoService grupoService;
 
     public List<TransacaoResponseDTO> salvarTransacao(TransacaoRequestDTO dto, Long idUsuario) {
         Usuario usuario = usuarioRepository.findById(idUsuario)
@@ -51,14 +51,7 @@ public class TransacaoService {
 
         Grupo grupo = null;
         if (dto.grupoId() != null) {
-            grupo = grupoRepository.findById(dto.grupoId())
-                    .orElseThrow(() -> new EntityNotFoundException("Grupo não encontrado"));
-
-            boolean fazParte = grupo.getUsuarios().stream()
-                    .anyMatch(u -> u.getId().equals(idUsuario));
-            if (!fazParte) {
-                throw new AcessoNegadoException("Acesso negado: Você não faz parte deste grupo.");
-            }
+            grupo = grupoService.buscarDoMembro(dto.grupoId(), idUsuario);
         }
 
         Transacao transacaoOriginal = new Transacao();
@@ -132,14 +125,7 @@ public class TransacaoService {
 
         Grupo grupo = null;
         if (dto.grupoId() != null) {
-            grupo = grupoRepository.findById(dto.grupoId())
-                    .orElseThrow(() -> new EntityNotFoundException("Grupo não encontrado"));
-
-            boolean fazParte = grupo.getUsuarios().stream()
-                    .anyMatch(u -> u.getId().equals(idUsuario));
-            if (!fazParte) {
-                throw new AcessoNegadoException("Acesso negado: Você não faz parte deste grupo.");
-            }
+            grupo = grupoService.buscarDoMembro(dto.grupoId(), idUsuario);
         }
 
         // Gasto comum (ou parcela antiga, sem compraId): edita só ele, como antes
@@ -211,85 +197,58 @@ public class TransacaoService {
         return new ResumoResponseDTO(mes, ano, totalGasto);
     }
 
-    public Page<TransacaoResponseDTO> listarPorGrupo(Long idGrupo, Long idUsuario, Pageable paginacao) {
-        // 1. Busca o grupo
-        Grupo grupo = grupoRepository.findById(idGrupo)
-                .orElseThrow(() -> new EntityNotFoundException("Grupo não encontrado"));
-
-        // 2. Trava de segurança: você realmente faz parte dessa casa?
-        boolean fazParte = grupo.getUsuarios().stream()
-                .anyMatch(u -> u.getId().equals(idUsuario));
-        if (!fazParte) {
-            throw new AcessoNegadoException("Acesso negado: Você não pode ver as contas deste grupo.");
-        }
-
-        // 3. Busca os dados no banco e converte para o DTO limpo
-        return repository.findByGrupoId(idGrupo, paginacao).map(TransacaoResponseDTO::new);
+    // Sem datas: todas as transações do grupo. Com inicio e fim: só as do período (o app usa o mês)
+    public Page<TransacaoResponseDTO> listarPorGrupo(Long idGrupo, LocalDate inicio, LocalDate fim, Long idUsuario, Pageable paginacao) {
+        grupoService.buscarDoMembro(idGrupo, idUsuario);
+        Page<Transacao> pagina = (inicio != null && fim != null)
+                ? repository.findByGrupoIdAndDataBetween(idGrupo, inicio, fim, paginacao)
+                : repository.findByGrupoId(idGrupo, paginacao);
+        return pagina.map(TransacaoResponseDTO::new);
     }
 
     public ResumoResponseDTO obterResumoMensalGrupo(Long idGrupo, Integer mes, Integer ano, Long idUsuario) {
-        // 1. Busca e valida o grupo
-        Grupo grupo = grupoRepository.findById(idGrupo)
-                .orElseThrow(() -> new EntityNotFoundException("Grupo não encontrado"));
-
-        // 2. Trava de Segurança
-        boolean fazParte = grupo.getUsuarios().stream()
-                .anyMatch(u -> u.getId().equals(idUsuario));
-        if (!fazParte) {
-            throw new AcessoNegadoException("Acesso negado: Você não pode ver o resumo deste grupo.");
-        }
-
-        // 3. Monta o calendário do mês
+        grupoService.buscarDoMembro(idGrupo, idUsuario);
         YearMonth anoMes = YearMonth.of(ano, mes);
-        LocalDate dataInicio = anoMes.atDay(1);
-        LocalDate dataFim = anoMes.atEndOfMonth();
-
-        // 4. Manda o banco somar tudo
-        BigDecimal totalGasto = repository.somarGastosPorGrupoEPeriodo(idGrupo, dataInicio, dataFim);
-
-        // 5. Se não houver gastos, retorna zero para não dar erro na tela
-        if (totalGasto == null) {
-            totalGasto = BigDecimal.ZERO;
-        }
-
-        return new ResumoResponseDTO(mes, ano, totalGasto);
+        BigDecimal totalGasto = repository.somarGastosPorGrupoEPeriodo(idGrupo, anoMes.atDay(1), anoMes.atEndOfMonth());
+        // Sem gastos o banco devolve null; mandamos zero para não dar erro na tela
+        return new ResumoResponseDTO(mes, ano, totalGasto != null ? totalGasto : BigDecimal.ZERO);
     }
 
-    public java.util.List<MembroResumoDTO> obterAcertoDeContas(Long idGrupo, Integer mes, Integer ano, Long idUsuario) {
-        // 1. Busca e valida o grupo (mesma regra de segurança)
-        Grupo grupo = grupoRepository.findById(idGrupo)
-                .orElseThrow(() -> new EntityNotFoundException("Grupo não encontrado"));
+    // Quanto cada membro pagou no mês e o saldo dele em relação à parte justa (total ÷ membros).
+    // Saldo positivo = tem a receber; negativo = deve. A soma dos saldos é sempre 0
+    public AcertoDeContasDTO obterAcertoDeContas(Long idGrupo, Integer mes, Integer ano, Long idUsuario) {
+        Grupo grupo = grupoService.buscarDoMembro(idGrupo, idUsuario);
+        YearMonth anoMes = YearMonth.of(ano, mes);
+        List<Transacao> transacoes = repository.findAllByGrupoIdAndDataBetween(idGrupo, anoMes.atDay(1), anoMes.atEndOfMonth());
 
-        boolean fazParte = grupo.getUsuarios().stream()
-                .anyMatch(u -> u.getId().equals(idUsuario));
-        if (!fazParte) {
-            throw new AcessoNegadoException("Acesso negado: Você não pode ver o acerto deste grupo.");
+        // Começa todo membro com 0, para quem não pagou nada também aparecer
+        List<Usuario> membros = grupo.getUsuarios().stream()
+                .sorted(java.util.Comparator.comparing(Usuario::getLogin)).toList();
+        java.util.Map<Long, BigDecimal> pagoPorMembro = new java.util.LinkedHashMap<>();
+        membros.forEach(m -> pagoPorMembro.put(m.getId(), BigDecimal.ZERO));
+        for (Transacao t : transacoes) {
+            // merge soma o valor ao que o membro já tinha
+            pagoPorMembro.merge(t.getUsuario().getId(), t.getValor(), BigDecimal::add);
         }
 
-        // 2. Monta o calendário
-        java.time.YearMonth anoMes = java.time.YearMonth.of(ano, mes);
-        java.time.LocalDate dataInicio = anoMes.atDay(1);
-        java.time.LocalDate dataFim = anoMes.atEndOfMonth();
+        BigDecimal total = transacoes.stream().map(Transacao::getValor).reduce(BigDecimal.ZERO, BigDecimal::add);
+        int n = membros.size();
+        BigDecimal parteJusta = total.divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP);
 
-        // 3. Busca todas as transações do mês
-        java.util.List<Transacao> transacoes = repository.findAllByGrupoIdAndDataBetween(idGrupo, dataInicio, dataFim);
+        // Divisão em centavos: 100 entre 3 = 33,34 + 33,33 + 33,33. Os centavos que sobram vão para
+        // os primeiros da lista, assim as partes somam exatamente o total e os saldos somam 0
+        long totalCentavos = total.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact();
+        long baseCentavos = totalCentavos / n;
+        long sobra = totalCentavos % n;
 
-        // 4. Agrupa por usuário e soma o valor de cada um (Inteligência do Java Streams)
-        java.util.Map<Usuario, BigDecimal> gastosPorUsuario = transacoes.stream()
-                .collect(java.util.stream.Collectors.groupingBy(
-                        Transacao::getUsuario,
-                        java.util.stream.Collectors.mapping(
-                                Transacao::getValor,
-                                java.util.stream.Collectors.reducing(BigDecimal.ZERO, BigDecimal::add)
-                        )
-                ));
-
-        // 5. Converte o resultado para a nossa lista de DTOs limpa
-        return gastosPorUsuario.entrySet().stream()
-                .map(entry -> new MembroResumoDTO(
-                        entry.getKey().getId(),
-                        entry.getKey().getLogin(),
-                        entry.getValue()))
-                .toList();
+        List<MembroResumoDTO> linhas = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            Usuario membro = membros.get(i);
+            BigDecimal parte = BigDecimal.valueOf(baseCentavos + (i < sobra ? 1 : 0), 2);
+            BigDecimal pago = pagoPorMembro.get(membro.getId()).setScale(2, RoundingMode.HALF_UP);
+            linhas.add(new MembroResumoDTO(membro.getId(), membro.getLogin(),
+                    membro.getId().equals(idUsuario), pago, pago.subtract(parte)));
+        }
+        return new AcertoDeContasDTO(mes, ano, total.setScale(2, RoundingMode.HALF_UP), parteJusta, linhas);
     }
 }

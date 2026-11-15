@@ -1,88 +1,84 @@
 package com.antony.financas_api.controller;
 
+import com.antony.financas_api.dto.GrupoDetalheDTO;
 import com.antony.financas_api.dto.GrupoRequestDTO;
 import com.antony.financas_api.dto.GrupoResponseDTO;
-import com.antony.financas_api.model.Grupo;
-import com.antony.financas_api.model.Usuario;
-import com.antony.financas_api.repository.GrupoRepository;
-import com.antony.financas_api.repository.UsuarioRepository;
+import com.antony.financas_api.service.GrupoService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import com.antony.financas_api.exception.AcessoNegadoException;
-import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
+import java.util.List;
 
+// As regras (só membro mexe no grupo, 404/403/409) ficam no GrupoService
 @RestController
 @RequestMapping("/grupos")
 @SecurityRequirement(name = "bearer-key")
 public class GrupoController {
 
     @Autowired
-    private GrupoRepository grupoRepository;
-
-    @Autowired
-    private UsuarioRepository usuarioRepository;
+    private GrupoService service;
 
     @PostMapping
     public ResponseEntity<GrupoResponseDTO> criarGrupo(@RequestBody @Valid GrupoRequestDTO dto, HttpServletRequest request) {
-        // 1. Descobre quem é o usuário logado
         Long idUsuario = (Long) request.getAttribute("idUsuario");
-        Usuario usuarioLogado = usuarioRepository.findById(idUsuario)
-                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
-
-        // 2. Monta o novo Grupo
-        Grupo novoGrupo = new Grupo();
-        novoGrupo.setNome(dto.nome());
-        novoGrupo.setDescricao(dto.descricao());
-
-        // 3. Adiciona o usuário logado na lista de participantes deste grupo
-        novoGrupo.getUsuarios().add(usuarioLogado);
-
-        // 4. Salva no banco (O JPA vai cuidar de preencher a tabela intermediária 'grupo_usuarios' sozinho!)
-        Grupo grupoSalvo = grupoRepository.save(novoGrupo);
-
+        GrupoResponseDTO grupo = service.criar(dto, idUsuario);
         URI uri = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
-                .buildAndExpand(grupoSalvo.getId()).toUri();
-
-        return ResponseEntity.created(uri).body(new GrupoResponseDTO(grupoSalvo));
+                .buildAndExpand(grupo.id()).toUri();
+        return ResponseEntity.created(uri).body(grupo);
     }
 
+    // Só os grupos de que o usuário logado faz parte
+    @GetMapping
+    public ResponseEntity<List<GrupoResponseDTO>> listarMeusGrupos(HttpServletRequest request) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        return ResponseEntity.ok(service.listarDoUsuario(idUsuario));
+    }
+
+    @GetMapping("/{idGrupo}")
+    public ResponseEntity<GrupoDetalheDTO> detalharGrupo(@PathVariable Long idGrupo, HttpServletRequest request) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        return ResponseEntity.ok(service.detalhar(idGrupo, idUsuario));
+    }
+
+    // Adiciona pelo e-mail: 404 se não existe conta, 409 se já é membro, 403 se quem pede não é membro
+    @PostMapping("/{idGrupo}/membros")
+    public ResponseEntity<GrupoDetalheDTO> adicionarMembroPorEmail(
+            @PathVariable Long idGrupo,
+            @RequestBody @Valid NovoMembroDTO dto,
+            HttpServletRequest request
+    ) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        return ResponseEntity.ok(service.adicionarMembroPorLogin(idGrupo, dto.login(), idUsuario));
+    }
+
+    // Rota antiga, pelo id do usuário. O app usa a de cima, por e-mail
     @PutMapping("/{idGrupo}/membros/{idNovoMembro}")
     public ResponseEntity<GrupoResponseDTO> adicionarMembro(
             @PathVariable Long idGrupo,
             @PathVariable Long idNovoMembro,
             HttpServletRequest request
     ) {
-        // 1. Pega o ID de quem está fazendo a requisição (você)
-        Long idUsuarioLogado = (Long) request.getAttribute("idUsuario");
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        return ResponseEntity.ok(service.adicionarMembroPorId(idGrupo, idNovoMembro, idUsuario));
+    }
 
-        // 2. Busca o grupo no banco de dados
-        Grupo grupo = grupoRepository.findById(idGrupo)
-                .orElseThrow(() -> new EntityNotFoundException("Grupo não encontrado"));
+    // Sair do grupo. Se ninguém sobrar, o grupo é apagado
+    @DeleteMapping("/{idGrupo}/membros/me")
+    public ResponseEntity<Void> sairDoGrupo(@PathVariable Long idGrupo, HttpServletRequest request) {
+        Long idUsuario = (Long) request.getAttribute("idUsuario");
+        service.sair(idGrupo, idUsuario);
+        return ResponseEntity.noContent().build();
+    }
 
-        // 3. Regra de Segurança: Verifica se você realmente faz parte desse grupo antes de adicionar alguém
-        boolean fazParte = grupo.getUsuarios().stream()
-                .anyMatch(u -> u.getId().equals(idUsuarioLogado));
-
-        if (!fazParte) {
-            throw new AcessoNegadoException("Acesso negado: Você não faz parte deste grupo.");
-        }
-
-        // 4. Busca a conta da pessoa que será adicionada
-        Usuario novoMembro = usuarioRepository.findById(idNovoMembro)
-                .orElseThrow(() -> new EntityNotFoundException("Usuário a ser adicionado não encontrado"));
-
-        // 5. Adiciona o novo membro e salva (o JPA atualiza a tabela intermediária automaticamente)
-        grupo.getUsuarios().add(novoMembro);
-        grupoRepository.save(grupo);
-
-        return ResponseEntity.ok(new GrupoResponseDTO(grupo));
+    public record NovoMembroDTO(@NotBlank @Email String login) {
     }
 }

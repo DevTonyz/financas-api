@@ -21,7 +21,10 @@ public record TransacaoResponseDTO(
         Long grupoId,
         // Parcela de uma compra: qual é (1, 2...) e a descrição sem o " 2/3" do fim. Nulos fora de compra parcelada
         Integer numeroParcela,
-        String descricaoBase
+        String descricaoBase,
+        // Quem lançou: nos gastos de um grupo aparecem transações de vários membros
+        Long usuarioId,
+        String loginUsuario
 ) {
     public TransacaoResponseDTO(Transacao transacao) {
         this(
@@ -35,7 +38,9 @@ public record TransacaoResponseDTO(
                 transacao.getParcelas(),
                 transacao.getGrupo() != null ? transacao.getGrupo().getId() : null,
                 transacao.getNumeroParcela(),
-                transacao.getNumeroParcela() != null ? semSufixoDeParcela(transacao.getDescricao()) : null
+                transacao.getNumeroParcela() != null ? semSufixoDeParcela(transacao.getDescricao()) : null,
+                transacao.getUsuario().getId(),
+                transacao.getUsuario().getLogin()
         );
     }
 

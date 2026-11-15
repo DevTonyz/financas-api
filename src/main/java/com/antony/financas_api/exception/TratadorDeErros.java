@@ -27,6 +27,11 @@ public class TratadorDeErros {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
     }
 
+    @ExceptionHandler(ConflitoException.class)
+    public ResponseEntity<String> tratarErro409(ConflitoException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
+    }
+
     @ExceptionHandler({IllegalArgumentException.class, MethodArgumentTypeMismatchException.class})
     public ResponseEntity<String> tratarErro400Simples(Exception ex) {
         // Parâmetro inválido (ex.: escopo=XYZ, ou TODAS na edição): 400 em vez de 500

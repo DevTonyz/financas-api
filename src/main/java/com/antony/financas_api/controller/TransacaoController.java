@@ -1,6 +1,6 @@
 package com.antony.financas_api.controller;
 
-import com.antony.financas_api.dto.MembroResumoDTO;
+import com.antony.financas_api.dto.AcertoDeContasDTO;
 import com.antony.financas_api.dto.TransacaoRequestDTO;
 import com.antony.financas_api.dto.TransacaoResponseDTO;
 import com.antony.financas_api.repository.TransacaoRepository;
@@ -89,23 +89,26 @@ public class TransacaoController {
     @GetMapping("/grupo/{idGrupo}")
     public ResponseEntity<Page<TransacaoResponseDTO>> listarPorGrupo(
             @PathVariable Long idGrupo,
+            // Opcionais: com os dois, lista só o período (ex.: o mês na tela do grupo)
+            @RequestParam(required = false) LocalDate inicio,
+            @RequestParam(required = false) LocalDate fim,
             @ParameterObject @PageableDefault(size = 10, sort = {"data"}) Pageable paginacao,
             HttpServletRequest request
     ) {
         Long idUsuario = (Long) request.getAttribute("idUsuario");
-        Page<TransacaoResponseDTO> page = service.listarPorGrupo(idGrupo, idUsuario, paginacao);
+        Page<TransacaoResponseDTO> page = service.listarPorGrupo(idGrupo, inicio, fim, idUsuario, paginacao);
         return ResponseEntity.ok(page);
     }
 
     @GetMapping("/grupo/{idGrupo}/acerto")
-    public ResponseEntity<List<MembroResumoDTO>> obterAcertoDeContas(
+    public ResponseEntity<AcertoDeContasDTO> obterAcertoDeContas(
             @PathVariable Long idGrupo,
             @RequestParam Integer mes,
             @RequestParam Integer ano,
             HttpServletRequest request
     ) {
         Long idUsuario = (Long) request.getAttribute("idUsuario");
-        List<MembroResumoDTO> acerto = service.obterAcertoDeContas(idGrupo, mes, ano, idUsuario);
+        AcertoDeContasDTO acerto = service.obterAcertoDeContas(idGrupo, mes, ano, idUsuario);
         return ResponseEntity.ok(acerto);
     }
 
