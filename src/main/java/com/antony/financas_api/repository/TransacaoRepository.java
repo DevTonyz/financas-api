@@ -16,6 +16,9 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
 
     boolean existsByCategoriaId(Long categoriaId);
 
+    // Parcelas de uma compra a partir de um número (inclusive), em ordem: usada no "esta e as próximas"
+    java.util.List<Transacao> findByCompraIdAndNumeroParcelaGreaterThanEqualOrderByNumeroParcela(String compraId, Integer numeroParcela);
+
     Page<Transacao> findByCategoriaIdAndUsuarioId(Long categoriaId, Long usuarioId, Pageable paginacao);
 
     Page<Transacao> findByDataBetweenAndUsuarioId(LocalDate dataInicio, LocalDate dataFim, Long usuarioId, Pageable paginacao);

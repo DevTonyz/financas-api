@@ -18,7 +18,10 @@ public record TransacaoResponseDTO(
         Long categoriaId,
         FormaPagamento formaPagamento,
         Integer parcelas,
-        Long grupoId
+        Long grupoId,
+        // Parcela de uma compra: qual é (1, 2...) e a descrição sem o " 2/3" do fim. Nulos fora de compra parcelada
+        Integer numeroParcela,
+        String descricaoBase
 ) {
     public TransacaoResponseDTO(Transacao transacao) {
         this(
@@ -30,7 +33,14 @@ public record TransacaoResponseDTO(
                 transacao.getCategoria().getId(),
                 transacao.getFormaPagamento(),
                 transacao.getParcelas(),
-                transacao.getGrupo() != null ? transacao.getGrupo().getId() : null
+                transacao.getGrupo() != null ? transacao.getGrupo().getId() : null,
+                transacao.getNumeroParcela(),
+                transacao.getNumeroParcela() != null ? semSufixoDeParcela(transacao.getDescricao()) : null
         );
+    }
+
+    // "Fone 2/3" -> "Fone"
+    public static String semSufixoDeParcela(String descricao) {
+        return descricao.replaceFirst("\\s+\\d+/\\d+$", "");
     }
 }

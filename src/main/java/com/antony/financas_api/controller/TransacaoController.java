@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springdoc.core.annotations.ParameterObject;
 import com.antony.financas_api.dto.ResumoResponseDTO;
+import com.antony.financas_api.model.EscopoParcelas;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -133,20 +134,24 @@ public class TransacaoController {
     public ResponseEntity<TransacaoResponseDTO> atualizarTransacao(
             @PathVariable Long id,
             @Valid @RequestBody TransacaoRequestDTO dto,
+            // Só importa em parcelas de uma compra: ESTA (padrão) ou PROXIMAS
+            @RequestParam(defaultValue = "ESTA") EscopoParcelas escopo,
             HttpServletRequest request
     ) {
         Long idUsuario = (Long) request.getAttribute("idUsuario");
-        TransacaoResponseDTO transacaoAtualizada = service.atualizarTransacao(id, dto, idUsuario);
+        TransacaoResponseDTO transacaoAtualizada = service.atualizarTransacao(id, dto, escopo, idUsuario);
         return ResponseEntity.ok(transacaoAtualizada);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deletarTransacao(
             @PathVariable Long id,
+            // Só importa em parcelas de uma compra: ESTA (padrão), PROXIMAS ou TODAS
+            @RequestParam(defaultValue = "ESTA") EscopoParcelas escopo,
             HttpServletRequest request
     ) {
         Long idUsuario = (Long) request.getAttribute("idUsuario");
-        service.deletarTransacao(id, idUsuario);
+        service.deletarTransacao(id, escopo, idUsuario);
         return ResponseEntity.noContent().build();
     }
 }

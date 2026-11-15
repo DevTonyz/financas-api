@@ -8,6 +8,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.List;
 
@@ -24,6 +25,15 @@ public class TratadorDeErros {
     public ResponseEntity<String> tratarErro403(AcessoNegadoException ex) {
         // Recurso de outra pessoa: 403 com a mensagem, em vez do 500 de antes
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
+    }
+
+    @ExceptionHandler({IllegalArgumentException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<String> tratarErro400Simples(Exception ex) {
+        // Parâmetro inválido (ex.: escopo=XYZ, ou TODAS na edição): 400 em vez de 500
+        String mensagem = ex instanceof MethodArgumentTypeMismatchException m
+                ? "Valor inválido para '" + m.getName() + "'"
+                : ex.getMessage();
+        return ResponseEntity.badRequest().body(mensagem);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
