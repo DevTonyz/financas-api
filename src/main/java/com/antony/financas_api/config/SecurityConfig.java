@@ -31,6 +31,9 @@ public class SecurityConfig {
                     req.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll();
                     req.requestMatchers(HttpMethod.POST, "/login").permitAll();
                     req.requestMatchers(HttpMethod.POST, "/usuarios").permitAll();
+                    // Página interna de erro do Spring: sem isso, qualquer erro 500 virava 401
+                    // e o app deslogaria o usuário sem motivo
+                    req.requestMatchers("/error").permitAll();
                     req.anyRequest().authenticated();
                 })
                 // Sem login válido, responde 401 (o padrão do Spring seria 403),

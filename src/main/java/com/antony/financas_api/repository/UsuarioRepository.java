@@ -7,4 +7,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     UserDetails findByLogin(String login);
+
+    // O Spring Data monta a consulta sozinho a partir do nome do método
+    boolean existsByLogin(String login);
 }

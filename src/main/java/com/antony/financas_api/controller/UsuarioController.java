@@ -5,7 +5,9 @@ import com.antony.financas_api.repository.UsuarioRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,10 +27,15 @@ public class UsuarioController {
     private PasswordEncoder passwordEncoder;
 
     @PostMapping
-    public ResponseEntity<DadosDetalhamentoUsuario> cadastrar(
+    public ResponseEntity<?> cadastrar(
             @RequestBody @Valid DadosCadastroUsuario dados,
             UriComponentsBuilder uriBuilder
     ) {
+        // E-mail já cadastrado: 409 (conflito), para o app mostrar uma mensagem clara
+        if (repository.existsByLogin(dados.login())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("E-mail já cadastrado");
+        }
+
         var senhaCriptografada = passwordEncoder.encode(dados.senha());
 
         var usuario = new Usuario();
@@ -44,7 +51,7 @@ public class UsuarioController {
 
 record DadosCadastroUsuario(
         @NotBlank @Email String login,
-        @NotBlank String senha
+        @NotBlank @Size(min = 6, message = "deve ter pelo menos 6 caracteres") String senha
 ) {}
 
 record DadosDetalhamentoUsuario(Long id, String login) {
