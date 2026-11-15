@@ -29,14 +29,21 @@ public class SecurityFilter extends OncePerRequestFilter {
         var tokenJWT = recuperarToken(request);
 
         if (tokenJWT != null) {
-            var login = tokenService.getSubject(tokenJWT);
-            var usuario = (Usuario) repository.findByLogin(login);
+            try {
+                var login = tokenService.getSubject(tokenJWT);
+                var usuario = (Usuario) repository.findByLogin(login);
 
-            // Disponibiliza o ID do usuário autenticado no contexto da requisição
-            request.setAttribute("idUsuario", usuario.getId());
+                if (usuario != null) {
+                    // Disponibiliza o ID do usuário autenticado no contexto da requisição
+                    request.setAttribute("idUsuario", usuario.getId());
 
-            var authentication = new UsernamePasswordAuthenticationToken(usuario, null, usuario.getAuthorities());
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+                    var authentication = new UsernamePasswordAuthenticationToken(usuario, null, usuario.getAuthorities());
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
+            } catch (RuntimeException e) {
+                // Token inválido ou expirado: seguimos sem autenticar.
+                // Rotas protegidas vão responder 401 (ver SecurityConfig) e rotas públicas continuam funcionando.
+            }
         }
 
         filterChain.doFilter(request, response);
